@@ -7,3 +7,5 @@ __pycache__/
 .cycle.lock
 .tmp-*
 site/
+/m16_fab.db
+/m16_fab.db-*

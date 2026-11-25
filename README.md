@@ -96,3 +96,26 @@ python -m unittest discover -s tests -v
 - 예약 실행은 30분 주기이며 상태·DB·리플레이를 한 커밋으로 푸시합니다.
   Pages에는 웹 화면과 리플레이 JSON을 게시하고, SQLite는 저장소와 Actions
   아티팩트에 보관합니다.
+
+## v6 로컬 API와 SQLite
+
+프로젝트 루트에서 실행합니다.
+
+```bash
+python -m pip install -r requirements.txt
+uvicorn backend.main:app --reload
+```
+
+브라우저에서 http://localhost:8000/docs 를 열고
+`GET /api/dashboard/summary`의 **Try it out**으로 초기 상태를 확인합니다.
+`POST /api/simulations/batch`에 `{"ticks": 6}`을 보내면 실행 행 1개와
+텔레메트리 행 6개가 `m16_fab.db`에 저장됩니다. 응답의 `run_code`로
+`GET /api/reports/{run_code}/export.csv`를 실행할 수 있습니다.
+실시간 이벤트는 `ws://localhost:8000/ws/fab`에서 수신합니다.
+
+서버를 시작하면 DB 테이블이 생성됩니다. 배치 실행은 텔레메트리를,
+설비 제어는 감사 로그를 저장합니다. 서버 재시작 시 최근 배치 스냅샷을
+복원하므로 이후의 수동 제어 값은 다음 배치에서 저장됩니다.
+이 API는 로컬 시연용입니다. 로그인과 AI 응답은 모의 동작이며, v3의
+`data/m16_fab_history.db`와 별도입니다.
+프론트엔드 연동 정보와 후속 작업은 [GPT_Handover_Prompt.md](GPT_Handover_Prompt.md)에 있습니다.

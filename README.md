@@ -16,13 +16,13 @@ docker compose up --build -d
 
 ### 3D 관제 미리보기
 
-**전체 관제 화면** · 8종 설비의 형태와 상태등을 한눈에 볼 수 있습니다.
+**3D 관제와 Lot 투입** · 8종 설비의 상태와 공정 진행률을 확인하고, FOUP당 웨이퍼 1~25매를 투입할 수 있습니다.
 
-![v7 3D 클린룸 전체 관제 화면](docs/images/v7-equipment-overview.png)
+![v7 3D 설비 관제와 Lot 투입 화면](docs/images/v7-lot-overview.png)
 
-**플라즈마 식각기 확대** · 원통형 식각 챔버와 설비별 상태, 잔여수명, 온도, FDC T², 예측 CD가 표시됩니다.
+**최종 검사·반출 이력** · 17매를 투입한 예시 Lot에서 공정별 처리 기록과 최종 분류 결과(양품 16매, QA 보류 1매)를 확인할 수 있습니다.
 
-![v7 플라즈마 식각기 확대와 계측 정보](docs/images/v7-equipment-etch-detail.png)
+![v7 Lot 산출 이력과 최종 검사 결과](docs/images/v7-lot-disposition.png)
 
 ## 기존 시뮬레이션
 

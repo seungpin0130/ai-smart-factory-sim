@@ -3,7 +3,7 @@ import json
 import os
 import re
 from pathlib import Path
-from models import classify
+from models import FactoryState, classify_state
 from storage import read_json
 
 MARKER = "<!-- dual-ai-factory:managed-incident:v1 -->"
@@ -44,22 +44,23 @@ def sync(record, github):
     issues = [i for i in github.pages("issues", {"state": "open"})
         if "pull_request" not in i and MARKER in (i.get("body") or "")
         and i.get("user", {}).get("login") == "github-actions[bot]"]
-    status = classify(record["state"]["temperature"], record["state"]["defect_rate"],
-                      record["state"]["raw_material"])
+    status = classify_state(FactoryState.model_validate(record["state"]))
     if record["create_issue_alert"]:
         issue = issues[0] if issues else github.request("POST", "issues", json={
-            "title": "🚨 [CRITICAL] 가상 공장 장애" if status == "CRITICAL" else "⚠️ AI 공장 점검 요청",
+            "title": "🚨 [CRITICAL] 가상 반도체 팹 장애" if status == "CRITICAL" else "⚠️ 가상 팹 점검 요청",
             "body": MARKER + "\n\n가상 공장 자동 감지. 복구되면 이 Issue를 자동 종료합니다.\n\n" +
                 "```json\n" + json.dumps(record["state"], ensure_ascii=False, indent=2) + "\n```"})
         add_cycle_comments(record, github, issue["number"])
     elif status == "NORMAL":
         for issue in issues:
             number = issue["number"]
+            add_cycle_comments(record, github, number)
             marker = f"<!-- factory-recovery:{record['cycle']} -->"
             existing = list(github.pages(f"issues/{number}/comments"))
             if not any(marker in (c.get("body") or "") for c in existing):
                 github.request("POST", f"issues/{number}/comments", json={"body": marker +
-                    f"\nCycle {record['cycle']}: NORMAL 복구 확인. 적용 설정: `{record['applied_config']}`"})
+                    f"\nCycle {record['cycle']}: SOP 임계값에 따라 NORMAL 복구 승인. "
+                    f"제어 모드: {record['mode']}. 적용 설정: `{record['applied_config']}`"})
             github.request("PATCH", f"issues/{number}", json={"state": "closed", "state_reason": "completed"})
 
 

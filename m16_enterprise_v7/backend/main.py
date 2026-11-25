@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Literal, Optional
 from urllib.parse import unquote, urlsplit
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 import csv
@@ -15,6 +15,7 @@ from backend.models import (
     SimulationTickLog,
     AiCouncilDecisionLog,
     AuditTrailLog,
+    LotTraceEvent,
     init_db,
 )
 from backend.simulator import M16SemiconFabSimulator
@@ -103,6 +104,21 @@ def apply_decision(engine, decision):
         )
 
 
+def persist_lot_events(db):
+    events = sorted(sim_engine.lot_events, key=lambda event: (event["fab_minute"], event["seq"]))
+    db.add_all(LotTraceEvent(trace_id=event["trace_id"], lot_id=event["lot_id"],
+                             fab_minute=event["fab_minute"], payload=event) for event in events)
+    return events
+
+
+def lot_history(db, trace_id, lot_id=None, limit=120):
+    query = db.query(LotTraceEvent).filter_by(trace_id=trace_id)
+    if lot_id:
+        query = query.filter_by(lot_id=lot_id)
+    rows = query.order_by(LotTraceEvent.fab_minute.desc(), LotTraceEvent.id.desc()).limit(limit).all()
+    return [{**row.payload, "recorded_at": row.recorded_at.isoformat()} for row in reversed(rows)]
+
+
 async def execute_one_tick(run_mode: str = "LIVE") -> Dict:
     global pending_ai_decision
     previous_q_time = sim_engine.snapshot()["kpi"]["q_time_violations"]
@@ -125,10 +141,12 @@ async def execute_one_tick(run_mode: str = "LIVE") -> Dict:
             if not applied:
                 pending_ai_decision = {**decision, "decision_id": row.id}
         persist_tick(db, snap, run_mode)
+        events = persist_lot_events(db)
+    sim_engine.lot_events.clear()
     return {
         "type": "TICK_UPDATE", "live_streaming": live_streaming_enabled,
         "ai_control_mode": ai_control_mode, "pending_ai_decision": pending_ai_decision,
-        "latest_decision": decision, "snapshot": snap,
+        "latest_decision": decision, "snapshot": snap, "lot_events": events,
     }
 
 
@@ -144,6 +162,9 @@ async def live_fab_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    with SessionLocal.begin() as db:
+        persist_lot_events(db)
+    sim_engine.lot_events.clear()
     task = asyncio.create_task(live_fab_loop())
     try:
         yield
@@ -285,6 +306,42 @@ async def switch_mode(
     return payload
 
 
+class ReleaseLotRequest(BaseModel):
+    wafers: int = Field(ge=1, le=25, strict=True)
+    priority: Literal["NORMAL", "HOT_LOT"] = "NORMAL"
+
+
+@app.get("/api/fab/lot-events")
+def get_lot_events(lot_id: str | None = Query(default=None, max_length=64),
+                   trace_id: str | None = Query(default=None, pattern=r"^[0-9a-f]{32}$"),
+                   limit: int = Query(default=120, ge=1, le=1000)):
+    run_id = trace_id or sim_engine.trace_id
+    with SessionLocal() as db:
+        return {"trace_id": run_id, "events": lot_history(db, run_id, lot_id, limit)}
+
+
+@app.post("/api/fab/lots", status_code=201)
+async def release_lot(
+    req: ReleaseLotRequest,
+    x_actor_id: str = Header(default="", max_length=64),
+    x_actor_role: str = Header(default="", max_length=256),
+):
+    role = enforce_rbac(x_actor_id, x_actor_role, "LOT_RELEASE", "STOCKER_A", {"manager", "engineer"})
+    async with state_lock:
+        if len(sim_engine.wip_lots) >= 26:
+            raise HTTPException(409, "입고 스토커 가용 슬롯이 없습니다.")
+        lot = sim_engine.release_lot(req.wafers, req.priority, source="MANUAL")
+        with SessionLocal.begin() as db:
+            events = persist_lot_events(db)
+            db.add(AuditTrailLog(actor_id=x_actor_id, actor_role=role, action_type="LOT_RELEASE",
+                                 target_tool="STOCKER_A", detail=f"{lot.lot_id}: {lot.wafer_count} wafers"))
+        sim_engine.lot_events.clear()
+        snap = sim_engine.snapshot()
+    await ws_manager.broadcast({"type": "CONTROL_UPDATE", "snapshot": snap, "lot_events": events})
+    return {"trace_id": snap["trace_id"], "lot_id": lot.lot_id, "foup_id": lot.foup_id,
+            "wafers": lot.wafer_count, "snapshot": snap, "lot_events": events}
+
+
 @app.post("/api/fab/control")
 async def control_tool(
     req: ToolControlRequest,
@@ -310,15 +367,17 @@ async def control_tool(
             rul_pct=req.rul_pct,
             action=req.action,
         )
-
-    detail = (
-        f"Action={req.action}"
-        if req.action
-        else f"Feed={req.feed_rate}, Load={req.load_ratio}, Temp={req.chamber_temp_c}, RUL={req.rul_pct}"
-    )
-    log_audit(x_actor_id, role, req.action or "PARAM_TUNE", req.tool_id, detail, True)
-    await ws_manager.broadcast({"type": "CONTROL_UPDATE", "snapshot": snap})
-    return {"snapshot": snap}
+        detail = (
+            f"Action={req.action}" if req.action else
+            f"Feed={req.feed_rate}, Load={req.load_ratio}, Temp={req.chamber_temp_c}, RUL={req.rul_pct}"
+        )
+        with SessionLocal.begin() as db:
+            events = persist_lot_events(db)
+            db.add(AuditTrailLog(actor_id=x_actor_id, actor_role=role, action_type=req.action or "PARAM_TUNE",
+                                 target_tool=req.tool_id, detail=detail))
+        sim_engine.lot_events.clear()
+    await ws_manager.broadcast({"type": "CONTROL_UPDATE", "snapshot": snap, "lot_events": events})
+    return {"snapshot": snap, "lot_events": events}
 
 
 @app.post("/api/fab/ai/approve")
@@ -339,11 +398,14 @@ async def approve_pending_ai(
             row = db.get(AiCouncilDecisionLog, decision["decision_id"])
             row.applied = True
             row.approved_by = x_actor_id
+            events = persist_lot_events(db)
             db.add(AuditTrailLog(actor_id=x_actor_id, actor_role=role, action_type="AI_APPROVE",
                                  target_tool="AI_COUNCIL", detail=decision["trigger_reason"], allowed=True))
+        sim_engine.lot_events.clear()
         pending_ai_decision = None
-    await ws_manager.broadcast({"type": "CONTROL_UPDATE", "snapshot": snap, "pending_ai_decision": None})
-    return {"status": "APPROVED", "snapshot": snap}
+    await ws_manager.broadcast({"type": "CONTROL_UPDATE", "snapshot": snap,
+                                "pending_ai_decision": None, "lot_events": events})
+    return {"status": "APPROVED", "snapshot": snap, "lot_events": events}
 
 
 @app.post("/api/fab/simulate")
@@ -351,13 +413,17 @@ async def run_batch_simulation(req: BatchSimRequest):
     ticks = req.ticks
     snapshots = []
     decisions = []
+    lot_events = []
     async with state_lock:
         for _ in range(ticks):
             res = await execute_one_tick(run_mode="BATCH")
             snapshots.append(res["snapshot"])
+            lot_events.extend(res["lot_events"])
             if res["latest_decision"]:
                 decisions.append(res["latest_decision"])
-    return {"ticks": ticks, "snapshots": snapshots, "decisions": decisions}
+    await ws_manager.broadcast({"type": "CONTROL_UPDATE", "snapshot": snapshots[-1],
+                                "lot_events": lot_events, "pending_ai_decision": pending_ai_decision})
+    return {"ticks": ticks, "snapshots": snapshots, "decisions": decisions, "lot_events": lot_events}
 
 
 @app.post("/api/fab/benchmark")
@@ -383,6 +449,7 @@ async def run_ab_benchmark(req: BenchmarkRequest):
                     pm_count += sum(act.get("action") == "PM" for act in dec["agreed_action"])
                     apply_decision(sim, dec)
                     snap = sim.snapshot(override_power_kw=snap["kpi"]["power_kw"])
+            sim.lot_events.clear()
             series.append(snap)
         last = series[-1]["kpi"]
         avg_yield = round(sum(s["kpi"]["eds_yield_pct"] for s in series) / len(series), 2)

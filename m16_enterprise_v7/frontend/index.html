@@ -602,7 +602,11 @@
               <option value="HBM_TSV_01">HBM_TSV_01 (TSV/하이브리드본딩 Bay 06)</option>
               <option value="EDS_01">EDS_01 (웨이퍼 프로브 테스트 Bay 07)</option>
             </select>
-            <div class="btn-group btn-group-sm" role="group" aria-label="3D 카메라">
+                        <div class="small">
+              <div id="tool-lot-progress" class="text-info"></div>
+              <progress id="tool-step-progress" class="w-100" max="100" value="0" aria-label="현재 공정 진행률" hidden></progress>
+            </div>
+<div class="btn-group btn-group-sm" role="group" aria-label="3D 카메라">
               <button type="button" class="btn btn-outline-info" id="btn-focus-tool">선택 설비 확대</button>
               <button type="button" class="btn btn-outline-secondary" id="btn-overview-camera">전체 보기</button>
             </div>
@@ -696,6 +700,33 @@
             </button>
           </div>
         </div>
+        <section class="admin-card p-3 mt-3" aria-labelledby="lot-trace-title">
+          <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+            <div>
+              <h5 id="lot-trace-title" class="mb-1">Lot 투입 · 공정 산출 이력</h5>
+              <p id="lot-material-summary" class="small text-secondary mb-0"></p>
+            </div>
+            <form id="lot-release-form" class="d-flex flex-wrap gap-2 align-items-center">
+              <label for="lot-wafers" class="small">투입 웨이퍼</label>
+              <input id="lot-wafers" class="form-control form-control-sm" style="width:5rem" type="number" min="1" max="25" step="1" value="25" required>
+              <select id="lot-priority" class="form-select form-select-sm w-auto" aria-label="Lot 우선순위">
+                <option value="NORMAL">일반</option><option value="HOT_LOT">긴급</option>
+              </select>
+              <button id="btn-release-lot" class="btn btn-sm btn-info" type="submit">Lot 투입</button>
+            </form>
+          </div>
+          <form id="lot-filter-form" class="input-group input-group-sm mb-2" style="max-width:26rem">
+            <input id="lot-filter" class="form-control" placeholder="Lot ID로 이력 조회" maxlength="64" aria-label="Lot ID">
+            <button class="btn btn-outline-info" type="submit">조회</button>
+          </form>
+          <p id="lot-trace-status" class="small text-secondary mb-2" role="status"></p>
+          <div class="table-responsive" style="max-height: 25rem; overflow-y: auto">
+            <table class="table table-sm table-hover align-middle mb-0 small">
+              <thead class="sticky-top"><tr><th>팹 시간</th><th>Lot / FOUP</th><th>설비 · 공정</th><th>이벤트</th><th>수량 · 측정 · 이동</th></tr></thead>
+              <tbody id="lot-trace-body"></tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
       <!-- =====================================================
@@ -847,6 +878,9 @@
     let backendConnected = false;
     let ws = null;
     let currentSnapshot = null;
+    let traceEvents = [];
+    let activeLotFilter = '';
+    let releaseInFlight = false;
     let historySeries = [];
     let auditLogs = [];
     let selectedToolId = "EUV_01";
@@ -963,13 +997,132 @@
       };
     }
 
+    const lotEventLabels = {
+      INITIAL_WIP: '초기 재공', LOT_RELEASED: 'Lot 투입', OHT_TRANSFER: 'OHT 이송',
+      PROCESS_STARTED: '공정 시작', PROCESS_COMPLETED: '공정 완료',
+      Q_TIME_EXCEEDED: 'Q-Time 초과', PROCESS_INTERRUPTED: '공정 중단',
+      LOT_DISPOSITION: '최종 검사·반출'
+    };
+
+    function lotEventDetails(e) {
+      const pieces = [e.source && e.destination ? `${e.source} → ${e.destination}` : e.destination];
+      if (e.wafers_in != null) pieces.push(`투입 ${e.wafers_in}매`);
+      if (e.wafers_out != null) pieces.push(`산출 ${e.wafers_out}매`);
+      if (e.accepted_wafers != null) {
+        pieces.push(`양품 ${e.accepted_wafers}매 → ${e.accepted_destination}`,
+          `QA 보류 ${e.rejected_wafers}매 → ${e.rejected_destination}`,
+          `모델 다이 수율 ${e.modeled_die_yield_pct}%`,
+          `총 경과 ${e.cycle_min}분`, `Q-Time 초과 ${e.q_time_violations}건`);
+      }
+      if (e.transfer_sec != null) pieces.push(`이송 ${e.transfer_sec}초 · 혼잡 ${e.congestion_pct}%`);
+      if (e.queue_min != null) pieces.push(`대기 ${e.queue_min}분`);
+      if (e.q_time_limit_min != null) pieces.push(`한도 ${e.q_time_limit_min}분`);
+      if (e.planned_process_min != null) pieces.push(`계획 처리 ${e.planned_process_min}분`);
+      if (e.process_min != null) pieces.push(`처리 ${e.process_min}분 · 온도 ${e.temperature_in_c} → ${e.temperature_c}°C`,
+        `압력 ${e.pressure_mtorr} mTorr · RF ${e.rf_power_w} W`,
+        `CD ${e.predicted_cd_nm}/${e.target_cd_nm} nm · FDC T² ${e.fdc_t2} · APC ${e.apc_offset_nm} nm`);
+      if (e.next_step) pieces.push(`다음 ${e.next_step}`);
+      if (e.wafers_held != null) pieces.push(`재대기 ${e.wafers_held}매 · ${e.reason}`);
+      return pieces.filter(Boolean).join(' · ') || `${e.wafer_count}매`;
+    }
+
+    function renderLotTrace() {
+      const kpi = currentSnapshot?.kpi;
+      document.getElementById('lot-material-summary').textContent = kpi?.released_wafers == null
+        ? '서버에 연결하면 Lot별 기록을 확인할 수 있습니다.'
+        : `초기 재공 ${kpi.initial_wip_wafers}매 + 신규 투입 ${kpi.released_wafers}매 · 재공 ${kpi.wip_wafer_count}매 · 양품 반출 ${kpi.accepted_wafers}매 · QA 보류 ${kpi.rejected_wafers}매`;
+      document.getElementById('btn-release-lot').disabled = releaseInFlight || !backendConnected || currentUser.role === '설비보전 파트장';
+      const table = document.getElementById('lot-trace-body');
+      table.replaceChildren();
+      for (const event of traceEvents.slice().reverse().slice(0, activeLotFilter ? 1000 : 120)) {
+        const row = table.insertRow();
+        for (const value of [
+          `+${event.fab_minute.toFixed(1)}분 · #${event.tick}`,
+          `${event.lot_id} / ${event.foup_id}`,
+          [event.tool_id, event.step_name, event.attempt > 1 ? `시도 ${event.attempt}` : ''].filter(Boolean).join(' · ') || '—',
+          lotEventLabels[event.event] || event.event, lotEventDetails(event)
+        ]) row.insertCell().textContent = value;
+      }
+    }
+
+    function mergeLotEvents(events) {
+      const byKey = new Map(traceEvents.map(e => [e.seq, e]));
+      for (const e of events) {
+        if (e.trace_id === currentSnapshot?.trace_id && (!activeLotFilter || e.lot_id === activeLotFilter)) {
+          byKey.set(e.seq, e);
+        }
+      }
+      traceEvents = [...byKey.values()].sort((a,b) => a.fab_minute - b.fab_minute || a.seq - b.seq)
+        .slice(-(activeLotFilter ? 1000 : 120));
+      renderLotTrace();
+    }
+
+    async function fetchLotTrace() {
+      const trace = currentSnapshot?.trace_id;
+      if (!trace || !backendConnected) return;
+      const filter = activeLotFilter;
+      const query = new URLSearchParams({trace_id: trace});
+      if (filter) {
+        query.set('lot_id', filter);
+        query.set('limit', '1000');
+      }
+      const status = document.getElementById('lot-trace-status');
+      try {
+        const response = await fetch(`/api/fab/lot-events?${query}`);
+        if (!response.ok) throw new Error('Lot 이력을 불러오지 못했습니다.');
+        const data = await response.json();
+        if (filter !== activeLotFilter || trace !== currentSnapshot?.trace_id) return;
+        mergeLotEvents(data.events);
+        status.textContent = traceEvents.length ? '' : '일치하는 Lot 이력이 없습니다.';
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    }
+
+    document.getElementById('lot-filter-form').addEventListener('submit', e => {
+      e.preventDefault();
+      activeLotFilter = document.getElementById('lot-filter').value.trim();
+      traceEvents = [];
+      renderLotTrace();
+      void fetchLotTrace();
+    });
+
+    document.getElementById('lot-release-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!backendConnected || releaseInFlight) return;
+      releaseInFlight = true;
+      const button = document.getElementById('btn-release-lot');
+      const status = document.getElementById('lot-trace-status');
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/fab/lots', {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({wafers: Number(document.getElementById('lot-wafers').value),
+            priority: document.getElementById('lot-priority').value})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '투입 요청이 거부되었습니다.');
+        if (!currentSnapshot || currentSnapshot.tick <= data.snapshot.tick) currentSnapshot = data.snapshot;
+        mergeLotEvents(data.lot_events);
+        status.textContent = `${data.lot_id} · ${data.wafers}매 투입 완료`;
+        renderAllViews();
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        releaseInFlight = false;
+        renderLotTrace();
+      }
+    });
+
     async function fetchStateAndSync() {
       try {
         const res = await fetch("/api/fab/state");
         if (!res.ok) throw new Error("API unavailable");
         const data = await res.json();
         backendConnected = true;
+        if (currentSnapshot?.trace_id !== data.snapshot.trace_id) traceEvents = [];
         currentSnapshot = data.snapshot;
+        void fetchLotTrace();
         historySeries = data.history || [];
         auditLogs = data.audit_logs || [];
         document.getElementById('switch-live-stream').checked = data.live_streaming;
@@ -998,7 +1151,13 @@
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
         if (msg.snapshot) {
-          currentSnapshot = msg.snapshot;
+          if (currentSnapshot?.trace_id !== msg.snapshot.trace_id) {
+            traceEvents = [];
+            currentSnapshot = msg.snapshot;
+            void fetchLotTrace();
+          } else {
+            currentSnapshot = msg.snapshot;
+          }
           historySeries.push({
             tick: currentSnapshot.tick,
             eds_yield_pct: currentSnapshot.kpi.eds_yield_pct,
@@ -1008,6 +1167,10 @@
             oht_congestion_pct: currentSnapshot.amhs_oht.congestion_pct,
           });
           if (historySeries.length > 30) historySeries.shift();
+        }
+        if (msg.lot_events) {
+          mergeLotEvents(msg.lot_events);
+          showLotTransfers(msg.lot_events);
         }
         if (msg.latest_decision) {
           renderAiCouncilCard(msg.latest_decision);
@@ -1169,6 +1332,7 @@
         });
       }
 
+      renderLotTrace();
       sync3DVisuals();
       selectTool(selectedToolId);
     }
@@ -1393,16 +1557,38 @@
     selectionRing.position.set(-5.5, 0.05, -3.5);
     scene.add(selectionRing);
 
-    // Overhead AMHS OHT Loop Track
+    // Use committed OHT transfer events to animate the FOUP toward its destination load port.
     const ohtCarriers = [];
-    for (let i = 0; i < 8; i++) {
-      const c = new THREE.Mesh(
-        new THREE.BoxGeometry(0.6, 0.4, 0.5),
-        new THREE.MeshStandardMaterial({ color: 0xf8fafc, emissive: 0x38bdf8, emissiveIntensity: 0.65 })
+    for (let i = 0; i < TOOL_LAYOUT.length; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(.58, .43, .48),
+        new THREE.MeshStandardMaterial({ color: 0xe2f4ff, emissive: 0x38bdf8, emissiveIntensity: .7 })
       );
-      c.userData = { offset: i / 8 };
-      scene.add(c);
-      ohtCarriers.push(c);
+      mesh.visible = false;
+      scene.add(mesh);
+      ohtCarriers.push(mesh);
+    }
+
+    function showLotTransfers(events) {
+      const transfers = events.filter(event => event.event === 'OHT_TRANSFER');
+      if (!transfers.length) return;
+      const latestTick = Math.max(...transfers.map(event => event.tick));
+      let index = 0;
+      for (const event of transfers.filter(event => event.tick === latestTick)) {
+        const target = toolMeshes[event.tool_id];
+        if (!target || index >= ohtCarriers.length) continue;
+        const bay = event.source?.replace('STOCKER_', '');
+        const originTool = Object.values(currentSnapshot.tools).find(tool => tool.bay_id === bay);
+        const origin = toolMeshes[originTool?.tool_id];
+        const carrier = ohtCarriers[index++];
+        carrier.userData = {
+          from: origin ? origin.position.clone() : new THREE.Vector3(-12, 0, 0),
+          to: target.position.clone(),
+          start: performance.now(),
+          duration: Math.min(1700, 650 + event.transfer_sec * 10),
+        };
+        carrier.visible = true;
+      }
     }
 
     function sync3DVisuals() {
@@ -1493,6 +1679,12 @@
       const t = currentSnapshot.tools[tid];
       if (!t) return;
       document.getElementById('sel-tool-e10').innerText = t.state;
+      const progress = document.getElementById('tool-step-progress');
+      progress.hidden = t.step_progress_pct == null;
+      progress.value = t.step_progress_pct ?? 0;
+      document.getElementById('tool-lot-progress').textContent = t.active_lot
+        ? `${t.active_lot} · ${t.active_foup ?? ''} · ${t.active_wafer_count ?? '—'}매 · ${t.active_step} (${t.step_progress_pct ?? 0}%)`
+        : '현재 처리 중인 Lot 없음';
       document.getElementById('inp-feed').value = t.feed_rate;
       document.getElementById('val-feed').innerText = `${t.feed_rate.toFixed(1)}x`;
       document.getElementById('inp-load').value = Math.round(t.load_ratio * 100);
@@ -1634,9 +1826,18 @@
       controls.update();
 
       selectionRing.scale.setScalar(1.0 + Math.sin(t * 4.0) * 0.04);
-      ohtCarriers.forEach(c => {
-        const angle = (t * 0.35 + c.userData.offset * Math.PI * 2);
-        c.position.set(Math.cos(angle) * 11.5, 4.4, Math.sin(angle) * 5.2);
+      const now = performance.now();
+      ohtCarriers.forEach(carrier => {
+        if (!carrier.visible) return;
+        const {from, to, start, duration} = carrier.userData;
+        const progress = (now - start) / duration;
+        if (progress >= 1) {
+          carrier.visible = false;
+          return;
+        }
+        carrier.position.lerpVectors(from, to, Math.min(1, progress / .78));
+        carrier.position.y = progress <= .78 ? 4.5 : 4.5 - 3.2 * (progress - .78) / .22;
+        carrier.position.z += .8;
       });
 
       if (document.getElementById('page-3d-control').classList.contains('active')) {

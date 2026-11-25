@@ -1,8 +1,8 @@
 from __future__ import annotations
-import copy
 import math
 import random
 from dataclasses import dataclass
+from uuid import uuid4
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
@@ -56,6 +56,10 @@ class FoupLot:
     cumulative_cd_error_nm: float = 0.0
     defect_density_d0: float = 0.042
     location: str = "STOCKER_A"
+    q_time_recorded: bool = False
+    attempt: int = 0
+    accepted_wafers: int = 0
+    rejected_wafers: int = 0
 
     @property
     def current_step(self) -> Optional[ProcessStep]:
@@ -98,6 +102,8 @@ class EquipmentTool:
     processed_wafers: int = 0
     active_lot: Optional[FoupLot] = None
     proc_remain_min: float = 0.0
+    proc_total_min: float = 0.0
+    proc_start_temp_c: float = 0.0
 
     @property
     def rul_pct(self) -> float:
@@ -121,6 +127,11 @@ class M16SemiconFabSimulator:
         self.tick = 100
         self.tick_minutes = 15.0
         self.lot_seq = 1
+        self.trace_id = uuid4().hex
+        self.event_seq = 0
+        self.lot_events = []
+        self.released_wafers = 0
+        self.initial_wip_wafers = 0
         self.total_q_time_violations = 0
         self.total_udt_events = 0
         self.extra_maint_cost_usd = 0.0
@@ -147,6 +158,43 @@ class M16SemiconFabSimulator:
             lot = self._create_new_lot(priority="HOT_LOT" if i % 5 == 0 else "NORMAL")
             lot.route_idx = i % (len(M16_HBM3E_ROUTE) - 1)
             self.wip_lots.append(lot)
+            self.initial_wip_wafers += lot.wafer_count
+            self._record_lot("INITIAL_WIP", lot, wafers_in=lot.wafer_count, destination=lot.location)
+
+    def _record_lot(self, event, lot, *, fab_minute=None, tool=None, **detail):
+        self.event_seq += 1
+        step = lot.current_step
+        self.lot_events.append({
+            "trace_id": self.trace_id, "seq": self.event_seq, "tick": self.tick,
+            "fab_minute": (self.tick - 100) * self.tick_minutes if fab_minute is None else round(fab_minute, 3),
+            "event": event, "lot_id": lot.lot_id, "foup_id": lot.foup_id, "product": lot.product,
+            "priority": lot.priority, "wafer_count": lot.wafer_count,
+            "step_seq": step.step_seq if step else None, "step_name": step.step_name if step else None,
+            "tool_id": tool.tool_id if tool else None, "attempt": lot.attempt, **detail,
+        })
+
+    def release_lot(self, wafer_count=25, priority="NORMAL", *, source="AUTO", fab_minute=None):
+        if not 1 <= wafer_count <= 25:
+            raise ValueError("A FOUP must contain 1–25 wafers")
+        lot = self._create_new_lot(priority)
+        lot.wafer_count = wafer_count
+        self.wip_lots.append(lot)
+        self.released_wafers += wafer_count
+        self._record_lot("LOT_RELEASED", lot, fab_minute=fab_minute, source=source,
+                         wafers_in=wafer_count, destination=lot.location)
+        return lot
+
+    def _interrupt_lot(self, tool, destination, reason, defect_penalty=0.0):
+        lot = tool.active_lot
+        if lot is None:
+            return
+        self._record_lot("PROCESS_INTERRUPTED", lot, tool=tool, source=lot.location,
+                         destination=destination, reason=reason, wafers_held=lot.wafer_count,
+                         remaining_min=round(tool.proc_remain_min, 2))
+        lot.defect_density_d0 += defect_penalty
+        lot.location = destination
+        tool.active_lot = None
+        tool.proc_remain_min = tool.proc_total_min = 0.0
 
     def _create_new_lot(self, priority: str = "NORMAL") -> FoupLot:
         lot = FoupLot(
@@ -191,9 +239,7 @@ class M16SemiconFabSimulator:
             tool.chamber_temp_c = tool.opt_temp_c
             tool.fdc_t2_score = 1.05
             self.extra_maint_cost_usd += 1200.0
-            if tool.active_lot:
-                tool.active_lot.location = f"STOCKER_{tool.bay_id}"
-                tool.active_lot = None
+            self._interrupt_lot(tool, f"STOCKER_{tool.bay_id}", tool.downtime_reason)
         elif action == "BM":
             tool.state = SemiE10State.UDT
             tool.downtime_reason = "INJECTED_RF_ARCING_BM"
@@ -201,15 +247,12 @@ class M16SemiconFabSimulator:
             tool.rf_on_hours = tool.max_rf_hours
             self.total_udt_events += 1
             self.extra_maint_cost_usd += 4800.0
-            if tool.active_lot:
-                tool.active_lot.defect_density_d0 += 0.028
-                tool.active_lot.location = f"STOCKER_{tool.bay_id}"
-                tool.active_lot = None
+            self._interrupt_lot(tool, f"STOCKER_{tool.bay_id}", tool.downtime_reason, .028)
 
         return self.snapshot()
 
-    def _dispatch_oht_and_lots(self) -> int:
-        transfers = 0
+    def _dispatch_oht_and_lots(self, tick_start: float):
+        dispatched = []
         for tool in self.tools.values():
             if tool.state == SemiE10State.SBY and tool.active_lot is None:
                 candidates = [
@@ -232,19 +275,32 @@ class M16SemiconFabSimulator:
 
                 candidates.sort(key=dispatch_score, reverse=True)
                 chosen = candidates[0]
+                source = chosen.location
                 chosen.location = f"LOADPORT_{tool.tool_id}"
                 tool.active_lot = chosen
                 tool.state = SemiE10State.PRD
                 step = chosen.current_step
-                speed_factor = max(0.5, tool.load_ratio * (1.0 + 0.08 * (tool.chamber_count - 1)))
-                tool.proc_remain_min = round(step.std_process_min / speed_factor, 1)
-                transfers += 1
+                speed_factor = max(.05, tool.feed_rate * tool.load_ratio * (1.0 + .08 * (tool.chamber_count - 1)))
+                tool.proc_start_temp_c = tool.chamber_temp_c
+                tool.proc_total_min = tool.proc_remain_min = round(step.std_process_min / speed_factor, 1)
+                chosen.attempt += 1
+                dispatched.append((tool, chosen, source))
 
+        transfers = len(dispatched)
         self.oht_active_transfers = min(self.oht_vehicles_total, 10 + transfers * 3 + len(self.wip_lots) // 3)
         self.oht_congestion_pct = round(min(98.0, (self.oht_active_transfers / self.oht_vehicles_total) * 100.0), 1)
         congestion_penalty = max(0.0, (self.oht_congestion_pct - 75.0) * 1.8)
         self.oht_avg_delivery_sec = round(48.0 + self.oht_active_transfers * 0.55 + congestion_penalty, 1)
-        return transfers
+        transfer_minutes = self.oht_avg_delivery_sec / 60
+        for tool, lot, source in dispatched:
+            self._record_lot("OHT_TRANSFER", lot, fab_minute=tick_start, tool=tool,
+                             source=source, destination=lot.location, transfer_sec=self.oht_avg_delivery_sec,
+                             congestion_pct=self.oht_congestion_pct)
+            self._record_lot("PROCESS_STARTED", lot, fab_minute=tick_start + transfer_minutes, tool=tool,
+                             wafers_in=lot.wafer_count, queue_min=round(lot.wait_min_at_step, 2),
+                             planned_process_min=tool.proc_total_min)
+            lot.total_cycle_min += transfer_minutes
+        return {tool.tool_id: transfer_minutes for tool, _, _ in dispatched}
 
     def _update_fdc_and_apc(self, tool: EquipmentTool, step: ProcessStep, lot: FoupLot) -> None:
         wear = tool.rf_on_hours / tool.max_rf_hours
@@ -274,22 +330,25 @@ class M16SemiconFabSimulator:
         self.tick += 1
         dt = self.tick_minutes
 
+        tick_start = (self.tick - 101) * dt
         euv_feed = self.tools["EUV_01"].feed_rate
         if len(self.wip_lots) < int(26 * euv_feed) and self.rng.random() < (0.68 * euv_feed):
-            self.wip_lots.append(self._create_new_lot(priority="HOT_LOT" if self.tick % 6 == 0 else "NORMAL"))
+            self.release_lot(priority="HOT_LOT" if self.tick % 6 == 0 else "NORMAL", fab_minute=tick_start)
 
+        transfer_minutes = self._dispatch_oht_and_lots(tick_start)
         for lot in self.wip_lots:
             if lot.location.startswith("STOCKER"):
                 lot.wait_min_at_step += dt
                 lot.total_cycle_min += dt
                 step = lot.current_step
-                if step and step.q_time_limit_min and lot.wait_min_at_step > step.q_time_limit_min:
+                if (step and step.q_time_limit_min is not None and not lot.q_time_recorded
+                        and lot.wait_min_at_step > step.q_time_limit_min):
                     lot.q_time_violations += 1
                     self.total_q_time_violations += 1
                     lot.defect_density_d0 += 0.006
-                    lot.wait_min_at_step = 0.0
-
-        self._dispatch_oht_and_lots()
+                    lot.q_time_recorded = True
+                    self._record_lot("Q_TIME_EXCEEDED", lot, queue_min=round(lot.wait_min_at_step, 2),
+                                     q_time_limit_min=step.q_time_limit_min)
 
         total_power_kw = 380.0 + self.oht_active_transfers * 3.8
         tick_completed_yields: List[float] = []
@@ -312,15 +371,21 @@ class M16SemiconFabSimulator:
                 continue
 
             if tool.state == SemiE10State.PRD and tool.active_lot is not None:
-                tool.time_prd += dt
-                tool.proc_remain_min -= dt
-                tool.active_lot.total_cycle_min += dt
+                transit = transfer_minutes.get(tool.tool_id, 0.0)
+                processed_min = min(tool.proc_remain_min, dt - transit)
+                finished_minute = tick_start + transit + processed_min
+                tool.time_prd += processed_min
+                tool.time_sby += dt - processed_min
+                tool.proc_remain_min -= processed_min
+                tool.active_lot.total_cycle_min += processed_min
 
-                tool.rf_on_hours += (dt / 60.0) * tool.load_ratio * 3.2
+                tool.rf_on_hours += (processed_min / 60.0) * tool.load_ratio * 3.2
                 tool.chamber_temp_c = round(
-                    tool.chamber_temp_c + (tool.load_ratio - 0.78) * 1.45 + self.rng.gauss(0, 0.14), 1
+                    tool.chamber_temp_c + ((tool.load_ratio - 0.78) * 1.45 + self.rng.gauss(0, 0.14))
+                    * processed_min / dt, 1
                 )
-                total_power_kw += (tool.rf_power_w / 1000.0) * tool.chamber_count * 42.0 * tool.load_ratio
+                active_power = (tool.rf_power_w / 1000.0) * tool.chamber_count * 42.0 * tool.load_ratio
+                total_power_kw += (active_power * processed_min + 65.0 * (dt - processed_min)) / dt
 
                 if tool.proc_remain_min <= 0:
                     lot = tool.active_lot
@@ -333,11 +398,40 @@ class M16SemiconFabSimulator:
                     tool.active_lot = None
                     tool.state = SemiE10State.SBY
 
-                    lot.route_idx += 1
-                    lot.wait_min_at_step = 0.0
+                    next_index = lot.route_idx + 1
+                    next_step = M16_HBM3E_ROUTE[next_index] if next_index < len(M16_HBM3E_ROUTE) else None
+                    destination = f"STOCKER_{tool.bay_id}" if next_step else "EDS_SORTED"
+                    self._record_lot(
+                        "PROCESS_COMPLETED", lot, fab_minute=finished_minute, tool=tool,
+                        wafers_out=lot.wafer_count, destination=destination,
+                        next_step=next_step.step_name if next_step else None,
+                        process_min=tool.proc_total_min, temperature_in_c=tool.proc_start_temp_c,
+                        temperature_c=tool.chamber_temp_c, pressure_mtorr=tool.chamber_pressure_mtorr,
+                        rf_power_w=tool.rf_power_w,
+                        predicted_cd_nm=tool.vm_predicted_cd_nm, target_cd_nm=step.target_cd_nm,
+                        fdc_t2=tool.fdc_t2_score, apc_offset_nm=tool.apc_bias_offset,
+                        defect_density_d0=round(lot.defect_density_d0, 4),
+                    )
+                    if next_step:
+                        lot.wait_min_at_step = dt - (finished_minute - tick_start)
+                        lot.total_cycle_min += lot.wait_min_at_step
+                    else:
+                        eds_y = self._compute_eds_yield(lot)
+                        lot.accepted_wafers = min(lot.wafer_count, math.floor(lot.wafer_count * eds_y / 100 + .5))
+                        lot.rejected_wafers = lot.wafer_count - lot.accepted_wafers
+                        self._record_lot(
+                            "LOT_DISPOSITION", lot, fab_minute=finished_minute, tool=tool,
+                            source=destination, accepted_destination="FG_STOCKER", rejected_destination="QA_HOLD",
+                            wafers_out=lot.wafer_count, accepted_wafers=lot.accepted_wafers,
+                            rejected_wafers=lot.rejected_wafers, modeled_die_yield_pct=eds_y,
+                            cycle_min=round(lot.total_cycle_min, 2), q_time_violations=lot.q_time_violations,
+                            cumulative_cd_error_nm=round(lot.cumulative_cd_error_nm, 3),
+                        )
+                    lot.route_idx = next_index
+                    lot.attempt = 0
+                    lot.q_time_recorded = False
                     if lot.route_idx >= len(M16_HBM3E_ROUTE):
                         lot.location = "COMPLETED"
-                        eds_y = self._compute_eds_yield(lot)
                         tick_completed_yields.append(eds_y)
                         self.wip_lots.remove(lot)
                         self.completed_lots.append(lot)
@@ -359,10 +453,7 @@ class M16SemiconFabSimulator:
                 tool.downtime_remain_min = 90.0
                 self.total_udt_events += 1
                 self.extra_maint_cost_usd += 4800.0
-                if tool.active_lot:
-                    tool.active_lot.defect_density_d0 += 0.025
-                    tool.active_lot.location = "STOCKER_RECOVERY"
-                    tool.active_lot = None
+                self._interrupt_lot(tool, "STOCKER_RECOVERY", tool.downtime_reason, .025)
 
         return self.snapshot(
             override_power_kw=round(total_power_kw, 1),
@@ -386,7 +477,7 @@ class M16SemiconFabSimulator:
         perf_pct = round(min(100.0, (len(self.wip_lots) / 22.0) * 94.0), 1)
         oee_pct = round((avg_avail / 100.0) * (perf_pct / 100.0) * (avg_yield / 100.0) * 100.0, 1)
         power_kw = override_power_kw if override_power_kw is not None else 1185.0
-        completed_wafers = max(25, len(self.completed_lots) * 25)
+        completed_wafers = max(25, sum(lot.wafer_count for lot in self.completed_lots))
         unit_cost = round(
             1090.0 + (power_kw / 18.0) + (100.0 - avg_yield) * 32.0 + (self.extra_maint_cost_usd / completed_wafers),
             1,
@@ -394,6 +485,7 @@ class M16SemiconFabSimulator:
 
         return {
             "tick": self.tick,
+            "trace_id": self.trace_id,
             "kpi": {
                 "eds_yield_pct": avg_yield,
                 "oee_pct": oee_pct,
@@ -401,10 +493,14 @@ class M16SemiconFabSimulator:
                 "power_kw": power_kw,
                 "unit_cost_usd": unit_cost,
                 "wip_foup_count": len(self.wip_lots),
-                "wip_wafer_count": len(self.wip_lots) * 25,
-                "completed_wafers": len(self.completed_lots) * 25,
+                "wip_wafer_count": sum(lot.wafer_count for lot in self.wip_lots),
+                "completed_wafers": sum(lot.wafer_count for lot in self.completed_lots),
                 "q_time_violations": self.total_q_time_violations,
                 "udt_events": self.total_udt_events,
+                "released_wafers": self.released_wafers,
+                "initial_wip_wafers": self.initial_wip_wafers,
+                "accepted_wafers": sum(lot.accepted_wafers for lot in self.completed_lots),
+                "rejected_wafers": sum(lot.rejected_wafers for lot in self.completed_lots),
             },
             "amhs_oht": {
                 "active_vehicles": self.oht_active_transfers,
@@ -429,6 +525,10 @@ class M16SemiconFabSimulator:
                     "apc_bias_offset": t.apc_bias_offset,
                     "availability_pct": t.availability_pct,
                     "active_lot": t.active_lot.lot_id if t.active_lot else None,
+                    "active_foup": t.active_lot.foup_id if t.active_lot else None,
+                    "active_wafer_count": t.active_lot.wafer_count if t.active_lot else 0,
+                    "step_progress_pct": (round(100 * (1 - t.proc_remain_min / t.proc_total_min), 1)
+                                          if t.active_lot and t.proc_total_min else None),
                     "active_step": (
                         t.active_lot.current_step.step_name
                         if (t.active_lot and t.active_lot.current_step)

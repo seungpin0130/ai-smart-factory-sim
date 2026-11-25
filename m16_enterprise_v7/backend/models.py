@@ -68,3 +68,13 @@ class AuditTrailLog(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+
+class LotTraceEvent(Base):
+    __tablename__ = "lot_trace_events"
+    id = Column(Integer, primary_key=True)
+    trace_id = Column(String(32), nullable=False, index=True)
+    lot_id = Column(String(64), nullable=False, index=True)
+    fab_minute = Column(Float, nullable=False)
+    payload = Column(JSON, nullable=False)
+    recorded_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)

@@ -23,13 +23,19 @@ def state(**updates):
 
 
 def config(**updates):
-    return FactoryConfig.model_validate({"conveyor_speed": 75, "cooling_power": 50,
-                                       "auto_restock": False, **updates})
+    return FactoryConfig.model_validate({"euv_throughput": 75, "chiller_power": 50,
+                                       "auto_foup_order": False, **updates})
 
 
 class NoEvent:
     def random(self):
         return .9
+
+    def randint(self, low, high):
+        return (low + high) // 2
+
+    def uniform(self, low, high):
+        return (low + high) / 2
 
 
 class FakeProvider:
@@ -44,17 +50,17 @@ class FakeProvider:
 
     def operations(self, context, transcript):
         self.mark("operations", transcript)
-        return Decision(new_config=config(conveyor_speed=95),
+        return Decision(new_config=config(euv_throughput=95),
                         action_reason="생산량 증대", create_issue_alert=False)
 
     def safety(self, context, transcript):
         self.mark("safety", transcript)
-        return Audit(recommended_config=config(conveyor_speed=60, cooling_power=90),
+        return Audit(recommended_config=config(euv_throughput=60, chiller_power=90),
                      risk_analysis="예상 과열 방지", approves_proposal=False)
 
-    def chair(self, context, transcript):
+    def chair(self, context, transcript, cycle=0):
         self.mark("chair", transcript)
-        return Decision(new_config=config(conveyor_speed=99, cooling_power=10),
+        return Decision(new_config=config(euv_throughput=99, chiller_power=10),
                         action_reason="최종안", create_issue_alert=False)
 
 
@@ -87,36 +93,36 @@ class FakeGitHub:
 
 class SimulationTests(unittest.TestCase):
     def test_material_limits_output(self):
-        s, _ = simulate(state(raw_material=12), config(), NoEvent())
-        self.assertEqual((s.output_units, s.raw_material), (12, 0))
+        s, _ = simulate(state(foup_wafer_stock=12,hbm_wip_buffer=0), config(), NoEvent())
+        self.assertEqual((s.wafer_output, s.foup_wafer_stock), (12, 0))
 
     def test_restock_consumed_once(self):
-        s, c = simulate(state(raw_material=0), config(auto_restock=True, conveyor_speed=0), NoEvent())
+        s, c = simulate(state(foup_wafer_stock=0), config(auto_foup_order=True, euv_throughput=0), NoEvent())
         s2, _ = simulate(s, c, NoEvent())
-        self.assertEqual((s.raw_material, s2.raw_material), (400, 400))
-        self.assertFalse(c.auto_restock)
+        self.assertEqual((s.foup_wafer_stock, s2.foup_wafer_stock), (200, 200))
+        self.assertFalse(c.auto_foup_order)
 
     def test_critical_interlock_ignores_unsafe_manual_config(self):
-        for updates in [{"temperature": 82.0}, {"defect_rate": 8.0}]:
-            s, _ = simulate(state(**updates), config(conveyor_speed=100), NoEvent())
-            self.assertEqual(s.output_units, 0)
-            self.assertIn("생산 정지", s.last_event)
+        for updates in [{"chamber_temp": 68.0}, {"eds_yield": 87.99}]:
+            s, _ = simulate(state(**updates), config(euv_throughput=100), NoEvent())
+            self.assertEqual(s.foup_wafer_stock, state().foup_wafer_stock)
+            self.assertIn("전공정 정지", s.last_event)
 
     def test_zero_material_has_no_production_heat(self):
-        a, _ = simulate(state(raw_material=0), config(conveyor_speed=100), NoEvent())
-        b, _ = simulate(state(raw_material=0), config(conveyor_speed=0), NoEvent())
-        self.assertEqual(a.temperature, b.temperature)
+        a, _ = simulate(state(foup_wafer_stock=0), config(euv_throughput=100), NoEvent())
+        b, _ = simulate(state(foup_wafer_stock=0), config(euv_throughput=0), NoEvent())
+        self.assertEqual(a.chamber_temp, b.chamber_temp)
 
-    def test_speed_increases_output_and_temperature(self):
-        low, _ = simulate(state(), config(conveyor_speed=30), NoEvent())
-        high, _ = simulate(state(), config(conveyor_speed=90), NoEvent())
-        self.assertGreater(high.output_units, low.output_units)
-        self.assertGreater(high.temperature, low.temperature)
+    def test_speed_increases_output_and_chamber_temp(self):
+        low, _ = simulate(state(hbm_wip_buffer=0), config(euv_throughput=30), NoEvent())
+        high, _ = simulate(state(hbm_wip_buffer=0), config(euv_throughput=90), NoEvent())
+        self.assertGreater(high.wafer_output, low.wafer_output)
+        self.assertGreater(high.chamber_temp, low.chamber_temp)
 
-    def test_cooling_lowers_temperature(self):
-        low, _ = simulate(state(), config(cooling_power=10), NoEvent())
-        high, _ = simulate(state(), config(cooling_power=90), NoEvent())
-        self.assertLess(high.temperature, low.temperature)
+    def test_cooling_lowers_chamber_temp(self):
+        low, _ = simulate(state(), config(chiller_power=10), NoEvent())
+        high, _ = simulate(state(), config(chiller_power=90), NoEvent())
+        self.assertLess(high.chamber_temp, low.chamber_temp)
 
     def test_deterministic_seed(self):
         a, _ = simulate(state(), config(), random.Random(42))
@@ -127,42 +133,42 @@ class SimulationTests(unittest.TestCase):
         s, c = state(), config()
         rng = random.Random(18)
         for _ in range(1000):
-            before = s.raw_material + (400 if c.auto_restock else 0)
+            before = s.foup_wafer_stock + s.hbm_wip_buffer + (200 if c.auto_foup_order else 0)
             s, c = simulate(s, c, rng)
-            delta = before - s.raw_material - s.output_units
-            self.assertIn(delta, range(81))
-            self.assertTrue(25 <= s.temperature <= 250)
-            self.assertTrue(0 <= s.defect_rate <= 100)
+            delta = before - s.foup_wafer_stock - s.hbm_wip_buffer - s.wafer_output
+            self.assertIn(delta,range(49))
+            self.assertTrue(20 <= s.chamber_temp <= 150)
+            self.assertTrue(0 <= s.eds_yield <= 100)
             record = deliberate(s, c)
             c = FactoryConfig.model_validate(record["applied_config"])
 
 
 class ControlTests(unittest.TestCase):
     def test_classification_boundaries(self):
-        for t, d, m, expected in [(81.9,7.99,80,"WARNING"), (82,0,500,"CRITICAL"),
-                (25,8,500,"CRITICAL"), (25,0,79,"CRITICAL"), (70,0,500,"WARNING"),
-                (25,4,500,"WARNING"), (25,0,199,"WARNING"), (69.9,3.99,200,"NORMAL")]:
+        for t, d, m, expected in [(67.99,88.0,50,"WARNING"), (68,98,500,"CRITICAL"),
+                (25,87.99,500,"CRITICAL"), (25,98,49,"CRITICAL"), (62,98,500,"WARNING"),
+                (25,93.99,500,"WARNING"), (25,98,119,"WARNING"), (61.99,94,120,"NORMAL")]:
             self.assertEqual(classify(t,d,m), expected)
 
     def test_reject_invalid_configs(self):
-        for updates in [{"conveyor_speed":101}, {"conveyor_speed":-1},
-                {"conveyor_speed":"70"}, {"conveyor_speed":True},
-                {"cooling_power":math.nan}, {"auto_restock":"false"}, {"extra":1}]:
+        for updates in [{"euv_throughput":101}, {"euv_throughput":-1},
+                {"euv_throughput":"70"}, {"euv_throughput":True},
+                {"chiller_power":math.nan}, {"auto_foup_order":"false"}, {"extra":1}]:
             with self.assertRaises(ValidationError):
                 config(**updates)
 
     def test_emergency_stop(self):
-        c, _ = enforce(state(temperature=82.0), config(conveyor_speed=100, cooling_power=0))
-        self.assertEqual((c.conveyor_speed,c.cooling_power), (0,100))
+        c, _ = enforce(state(chamber_temp=68.0), config(euv_throughput=100, chiller_power=0))
+        self.assertEqual((c.euv_throughput,c.chiller_power), (0,100))
 
     def test_warning_bands(self):
-        for t, speed, cooling in [(75.0,50,90), (70.0,65,75)]:
-            c, _ = enforce(state(temperature=t), config(conveyor_speed=100, cooling_power=0))
-            self.assertEqual((c.conveyor_speed,c.cooling_power), (speed,cooling))
+        for t, speed, cooling in [(62.0,50,85), (67.0,50,85)]:
+            c, _ = enforce(state(chamber_temp=t), config(euv_throughput=100, chiller_power=0))
+            self.assertEqual((c.euv_throughput,c.chiller_power), (speed,cooling))
 
     def test_predictive_restock(self):
-        c, _ = enforce(state(raw_material=300), config(conveyor_speed=80))
-        self.assertTrue(c.auto_restock)
+        c, _ = enforce(state(foup_wafer_stock=150), config(euv_throughput=80))
+        self.assertTrue(c.auto_foup_order)
 
     def test_mock_never_instantiates_live_client(self):
         with patch("ai_council.LiveCouncil", side_effect=AssertionError):
@@ -172,10 +178,10 @@ class ControlTests(unittest.TestCase):
 
     def test_all_provider_failure_stages(self):
         for index, stage in enumerate(["operations","safety","chair"]):
-            result = deliberate(state(temperature=90.0), config(), "live", FakeProvider(stage))
+            result = deliberate(state(chamber_temp=90.0), config(), "live", FakeProvider(stage))
             self.assertEqual(result["mode"], "fallback")
             self.assertEqual(len(result["transcript"]), index)
-            self.assertEqual(result["applied_config"]["conveyor_speed"], 0)
+            self.assertEqual(result["applied_config"]["euv_throughput"], 0)
             self.assertTrue(result["create_issue_alert"])
             self.assertNotIn("SECRET", json.dumps(result))
 
@@ -185,8 +191,8 @@ class ControlTests(unittest.TestCase):
         self.assertEqual([c[0] for c in provider.calls], ["operations","safety","chair"])
         self.assertEqual([len(c[1]) for c in provider.calls], [0,1,2])
         self.assertEqual(result["mode"], "live")
-        self.assertEqual(result["applied_config"]["conveyor_speed"], 60)
-        self.assertEqual(result["applied_config"]["cooling_power"], 90)
+        self.assertEqual(result["applied_config"]["euv_throughput"], 60)
+        self.assertEqual(result["applied_config"]["chiller_power"], 90)
         self.assertTrue(result["overrides"])
 
     def test_missing_keys_falls_back(self):
@@ -236,7 +242,7 @@ class IncidentTests(unittest.TestCase):
 
     def test_critical_issue_and_turns_are_idempotent(self):
         github=FakeGitHub()
-        record=self.record(temperature=90.0)
+        record=self.record(chamber_temp=90.0)
         sync(record,github)
         count=len(github.calls)
         sync(record,github)
@@ -247,25 +253,25 @@ class IncidentTests(unittest.TestCase):
     def test_recovery_closes_managed_only(self):
         github=FakeGitHub()
         github.issues=[{"number":1,"body":"A human issue","user":{"login":"owner"},"state":"open"}]
-        sync(self.record(temperature=90.0),github)
-        sync(self.record(temperature=45.0,raw_material=500),github)
+        sync(self.record(chamber_temp=90.0),github)
+        sync(self.record(chamber_temp=45.0,foup_wafer_stock=500),github)
         self.assertEqual(github.issues[0]["state"],"open")
         self.assertEqual(github.issues[1]["state"],"closed")
 
     def test_warning_does_not_close(self):
         github=FakeGitHub()
-        sync(self.record(temperature=90.0),github)
-        sync(self.record(temperature=74.0),github)
+        sync(self.record(chamber_temp=90.0),github)
+        sync(self.record(chamber_temp=64.0),github)
         self.assertEqual(github.issues[0]["state"],"open")
 
     def test_mock_cannot_modify_incidents(self):
         github=FakeGitHub()
-        sync(deliberate(state(temperature=90.0),config(),"mock"),github)
+        sync(deliberate(state(chamber_temp=90.0),config(),"mock"),github)
         self.assertFalse(github.calls)
 
     def test_fallback_still_reports_critical(self):
         github=FakeGitHub()
-        record=deliberate(state(raw_material=0),config(),"live",FakeProvider("operations"))
+        record=deliberate(state(foup_wafer_stock=0),config(),"live",FakeProvider("operations"))
         sync(record,github)
         self.assertEqual(len(github.issues),1)
         self.assertEqual(len(github.comments[1]),1)

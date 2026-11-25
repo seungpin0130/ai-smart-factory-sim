@@ -1,19 +1,94 @@
 {
   "state": {
-    "cycle": 0,
-    "timestamp": "2026-11-25T00:00:00Z",
-    "temperature": 45.0,
-    "output_units": 0,
-    "total_output": 0,
-    "defect_rate": 1.0,
-    "raw_material": 500,
+    "cycle": 1,
+    "timestamp": "2026-11-25T05:23:14+00:00",
+    "temperature": 49.0,
+    "output_units": 112,
+    "total_output": 112,
+    "defect_rate": 0.8,
+    "raw_material": 388,
     "status": "NORMAL",
-    "last_event": "시스템 초기화 완료"
+    "last_event": "정상 가동"
   },
   "config": {
-    "conveyor_speed": 75,
-    "cooling_power": 50,
+    "conveyor_speed": 70,
+    "cooling_power": 65,
     "auto_restock": false
   },
-  "history": []
+  "history": [
+    {
+      "cycle": 1,
+      "timestamp": "2026-11-25T05:23:14+00:00",
+      "mode": "mock",
+      "requested_mode": "mock",
+      "error_type": null,
+      "state": {
+        "cycle": 1,
+        "timestamp": "2026-11-25T05:23:14+00:00",
+        "temperature": 49.0,
+        "output_units": 112,
+        "total_output": 112,
+        "defect_rate": 0.8,
+        "raw_material": 388,
+        "status": "NORMAL",
+        "last_event": "정상 가동"
+      },
+      "previous_config": {
+        "conveyor_speed": 75,
+        "cooling_power": 50,
+        "auto_restock": false
+      },
+      "proposed_config": {
+        "conveyor_speed": 70,
+        "cooling_power": 65,
+        "auto_restock": false
+      },
+      "applied_config": {
+        "conveyor_speed": 70,
+        "cooling_power": 65,
+        "auto_restock": false
+      },
+      "action_reason": "[MOCK] 규칙 기반 제어 확정 (실제 AI 호출 없음)",
+      "overrides": [],
+      "create_issue_alert": false,
+      "transcript": [
+        {
+          "role": "ChatGPT (모의)",
+          "payload": {
+            "new_config": {
+              "conveyor_speed": 70,
+              "cooling_power": 65,
+              "auto_restock": false
+            },
+            "action_reason": "[MOCK] 생산 120개 목표의 규칙 기반 제안",
+            "create_issue_alert": false
+          }
+        },
+        {
+          "role": "Gemini (모의)",
+          "payload": {
+            "recommended_config": {
+              "conveyor_speed": 70,
+              "cooling_power": 65,
+              "auto_restock": false
+            },
+            "risk_analysis": "[MOCK] 온도·불량률·예상 잔고에 SOP 적용",
+            "approves_proposal": true
+          }
+        },
+        {
+          "role": "의장 (모의)",
+          "payload": {
+            "new_config": {
+              "conveyor_speed": 70,
+              "cooling_power": 65,
+              "auto_restock": false
+            },
+            "action_reason": "[MOCK] 규칙 기반 제어 확정 (실제 AI 호출 없음)",
+            "create_issue_alert": false
+          }
+        }
+      ]
+    }
+  ]
 }

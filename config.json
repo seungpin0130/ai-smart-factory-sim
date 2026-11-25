@@ -1,5 +1,5 @@
 {
-  "conveyor_speed": 75,
-  "cooling_power": 50,
+  "conveyor_speed": 70,
+  "cooling_power": 65,
   "auto_restock": false
 }

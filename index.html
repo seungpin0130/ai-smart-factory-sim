@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FACTORY / 듀얼 AI 관제 센터</title>
+<style>
+:root{color-scheme:dark;--bg:#0b111b;--panel:#121d2b;--line:#263345;--text:#edf3fc;--muted:#9eafc5;--mint:#58dec0;--amber:#ffd175;--red:#ff7f8c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,sans-serif}main{max-width:1280px;margin:auto;padding:36px 30px}header{display:flex;justify-content:space-between;align-items:center;gap:20px;border-bottom:1px solid var(--line);padding-bottom:24px}h1{font-size:28px;margin:5px 0}h2{font-size:17px;margin:0 0 18px}p{margin:7px 0}.eyebrow{font-size:11px;letter-spacing:3px;color:var(--mint)}.muted,small{color:var(--muted)}button,select{font:inherit;color:var(--text);background:#203149;border:1px solid #38516b;border-radius:8px;padding:8px 15px;cursor:pointer}button:focus-visible,select:focus-visible{outline:2px solid var(--mint)}.status{display:inline-block;padding:4px 10px;border-radius:5px;font-size:12px;background:#203149}.NORMAL{color:var(--mint)}.WARNING{color:var(--amber)}.CRITICAL{color:var(--red)}.banner{margin:20px 0;padding:12px 16px;border:1px solid var(--line);border-radius:8px;color:var(--amber);background:#1d2330}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin:24px 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}.label{font-size:12px;color:var(--muted)}.value{font-size:30px;font-weight:650;letter-spacing:-1px;margin:10px 0}.unit{font-size:13px;color:var(--muted);letter-spacing:0}.columns{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:22px}.chart{width:100%;height:180px;display:block}.axis{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}.chart-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.legend{font-size:11px;color:var(--muted)}.controls{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:22px}.controls strong{color:var(--mint)}.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px}article{border-top:1px solid var(--line);padding:20px 0}article:first-child{border:0}.turns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:15px 0}.turn{background:#0d1724;border-left:2px solid var(--mint);padding:14px;border-radius:4px}.turn:nth-child(2){border-color:#8eaeff}.turn h3{font-size:12px;color:var(--mint);margin:0 0 8px}.turn:nth-child(2) h3{color:#8eaeff}.reason{background:#1d2b40;padding:14px;border-radius:8px}.payload{font-size:12px;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}details summary{cursor:pointer;color:var(--muted);font-size:12px}footer{border-top:1px solid var(--line);margin-top:26px;padding-top:15px;font-size:12px;color:var(--muted)}#error{color:var(--red)}.empty{padding:30px;color:var(--muted);text-align:center}
+@media(max-width:900px){.kpis{grid-template-columns:repeat(3,1fr)}.columns{grid-template-columns:1fr}}@media(max-width:600px){main{padding:20px 16px}header{align-items:flex-start;flex-direction:column}h1{font-size:23px}.kpis{grid-template-columns:repeat(2,1fr)}.turns{grid-template-columns:1fr}.card{padding:16px}.toolbar{align-items:flex-start;flex-direction:column}}
+</style>
+<main>
+<header><div><div class="eyebrow">VIRTUAL PRODUCTION / AI COUNCIL</div><h1>듀얼 AI 스마트 팩토리</h1><p class="muted">ChatGPT 생산 총괄 × Gemini 안전·품질 감사</p></div><div><span id="status" class="status">대기</span> <button id="refresh">새로고침 ↻</button><p><small id="updated">초기 데이터를 불러옵니다.</small></p></div></header>
+<p id="error" role="alert"></p><div class="banner" id="mode" role="status">아직 실행 전입니다. 첫 사이클을 시작하면 제어 모드가 표시됩니다.</div>
+<section class="kpis" aria-label="주요 생산 지표">
+<div class="card"><div class="label">현재 사이클</div><div class="value" id="cycle">0</div><small id="total">누적 생산 0개</small></div>
+<div class="card"><div class="label">설비 온도 · 위험 ≥82°C</div><div class="value"><span id="temperature">—</span> <span class="unit">°C</span></div><small>75°C부터 감속 제어</small></div>
+<div class="card"><div class="label">사이클 생산량 · 목표 120개</div><div class="value"><span id="output">—</span> <span class="unit">개</span></div><small>불량 포함 총생산량</small></div>
+<div class="card"><div class="label">공정 불량률 · 목표 ≤3%</div><div class="value"><span id="defect">—</span> <span class="unit">%</span></div><small>위험 ≥8% / 주의 ≥4%</small></div>
+<div class="card"><div class="label">원자재 · 위험 &lt;80단위</div><div class="value"><span id="material">—</span> <span class="unit">단위</span></div><small id="restock">다음 사이클 발주 —</small></div>
+</section>
+<section class="card controls" aria-label="다음 사이클 제어값"><span>다음 컨베이어 속도 <strong id="speed">—</strong></span><span>냉각 출력 <strong id="cooling">—</strong></span><span class="muted" id="event">시스템 초기화</span></section>
+<section class="columns" aria-label="생산 추세">
+<div class="card"><div class="chart-title"><h2>설비 온도</h2><span class="legend">°C · 점선: 위험 82°C</span></div><svg id="temp-chart" class="chart" role="img" aria-label="설비 온도 추이"></svg><div class="axis" id="temp-axis"></div></div>
+<div class="card"><div class="chart-title"><h2>사이클 생산량</h2><span class="legend">개 · 점선: 목표 120개</span></div><svg id="output-chart" class="chart" role="img" aria-label="생산량 추이"></svg><div class="axis" id="output-axis"></div></div>
+</section>
+<section class="card"><div class="toolbar"><h2 style="margin:0">운영 위원회 회의록</h2><label class="label">표시할 기록 <select id="filter"><option value="all">전체 모드</option><option value="live">실제 AI</option><option value="mock">모의 실행</option><option value="fallback">대체 제어</option></select></label></div><div id="records"><p class="empty">아직 회의 기록이 없습니다.</p></div></section>
+<footer>가상 공장 시뮬레이션 · 센서 및 회의록 60초마다 확인 · 기록은 최근 120회 표시 · 실제 설비와 연결되지 않습니다.</footer>
+</main>
+<script>
+const el=id=>document.getElementById(id);let history=[];let busy=false;
+const text=(id,value)=>{el(id).textContent=value};
+function node(tag,content,cls){const n=document.createElement(tag);if(content!==undefined)n.textContent=content;if(cls)n.className=cls;return n}
+function chart(id,axisId,data,key,threshold,color){
+ const svg=el(id);svg.replaceChildren();svg.setAttribute('viewBox','0 0 560 180');
+ if(!data.length){const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x',20);t.setAttribute('y',80);t.setAttribute('fill','#9eafc5');t.textContent='첫 사이클 실행 후 표시됩니다.';svg.append(t);return}
+ const values=data.map(d=>d.state[key]);const max=Math.max(threshold*1.15,...values)*1.05;
+ const xy=(v,i)=>[30+i*500/Math.max(1,values.length-1),155-v/max*125];
+ function shape(tag,attrs){const n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);svg.append(n);return n}
+ const y=xy(threshold,0)[1];shape('line',{x1:30,x2:530,y1:y,y2:y,stroke:'#536276','stroke-dasharray':'5 5'});
+ shape('text',{x:2,y:y+4,fill:'#9eafc5','font-size':10}).textContent=threshold;
+ shape('polyline',{points:values.map((v,i)=>xy(v,i).join(',')).join(' '),fill:'none',stroke:color,'stroke-width':2.5});
+ values.forEach((v,i)=>{const[x,y]=xy(v,i);const p=shape('circle',{cx:x,cy:y,r:3,fill:color});const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=`Cycle ${data[i].cycle}: ${v}`;p.append(title)});
+ el(axisId).replaceChildren(node('span',`Cycle ${data[0].cycle}`),node('span',`Cycle ${data.at(-1).cycle}`));
+}
+function renderRecords(){
+ const container=el('records');container.replaceChildren();const selected=history.filter(d=>el('filter').value==='all'||d.mode===el('filter').value).slice(-30).reverse();
+ if(!selected.length){container.append(node('p','해당 모드의 회의 기록이 없습니다.','empty'));return}
+ for(const d of selected){
+  const article=node('article');const heading=node('div');heading.append(node('strong',`Cycle ${d.cycle} `),node('span',`${d.state.status} · ${d.mode}`,`status ${d.state.status}`));article.append(heading,node('small',new Date(d.timestamp).toLocaleString('ko-KR')));
+  const turns=node('div',undefined,'turns');
+  for(const turn of d.transcript){const box=node('div',undefined,'turn');box.append(node('h3',turn.role));const p=turn.payload;box.append(node('p',p.action_reason||p.risk_analysis||''));const details=node('details');details.append(node('summary','제안 제어값 보기'),node('pre',JSON.stringify(p.new_config||p.recommended_config||p,null,2),'payload'));box.append(details);turns.append(box)}
+  article.append(turns);const reason=node('div',undefined,'reason');reason.append(node('strong','최종 적용 '),node('span',d.action_reason),node('p',`속도 ${d.applied_config.conveyor_speed}% · 냉각 ${d.applied_config.cooling_power}% · 발주 ${d.applied_config.auto_restock?'예약':'없음'}`));
+  if(d.overrides.length)reason.append(node('small',`제어 보정: ${d.overrides.join(' / ')}`));if(d.error_type)reason.append(node('p',`API 오류 유형: ${d.error_type}`,'muted'));article.append(reason);container.append(article);
+ }
+}
+async function load(){if(busy)return;busy=true;el('refresh').disabled=true;try{
+ const response=await fetch(`./dashboard.json?t=${Date.now()}`,{cache:'no-store'});if(!response.ok)throw Error(`HTTP ${response.status}`);const d=await response.json();const s=d.state,c=d.config;history=d.history;
+ text('cycle',s.cycle);text('temperature',s.temperature);text('output',s.output_units.toLocaleString());text('defect',s.defect_rate);text('material',s.raw_material.toLocaleString());text('total',`누적 생산 ${s.total_output.toLocaleString()}개`);text('speed',`${c.conveyor_speed}%`);text('cooling',`${c.cooling_power}%`);text('restock',c.auto_restock?'다음 사이클 400단위 입고 예약':'발주 예약 없음');text('event',s.last_event);text('status',s.status);el('status').className=`status ${s.status}`;
+ const age=Date.now()-Date.parse(s.timestamp);text('updated',`데이터 기준: ${new Date(s.timestamp).toLocaleString('ko-KR')}${s.cycle&&age>45*60*1000?' · 최근 갱신 지연':''}`);
+ const mode=history.at(-1)?.mode;text('mode',mode==='live'?'실제 AI 운영 · OpenAI → Gemini → OpenAI 3턴 완료':mode==='mock'?'모의 실행 · 표시된 발언은 규칙 기반 예시이며 API를 호출하지 않았습니다.':mode==='fallback'?'대체 제어 · API 또는 응답 검증 실패로 SOP를 적용했습니다.':'초기 상태 · 첫 사이클 실행 대기');
+ chart('temp-chart','temp-axis',history.slice(-40),'temperature',82,'#ff8c99');chart('output-chart','output-axis',history.slice(-40),'output_units',120,'#58dec0');renderRecords();text('error','');
+ }catch(error){text('error',`데이터를 불러오지 못했습니다 (${error.message}). 로컬에서는 python -m http.server 8000으로 실행하세요.`)}finally{busy=false;el('refresh').disabled=false}}
+el('refresh').addEventListener('click',load);el('filter').addEventListener('change',renderRecords);load();setInterval(load,60000);
+</script>
+</html>

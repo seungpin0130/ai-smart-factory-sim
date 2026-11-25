@@ -1,0 +1,19 @@
+{
+  "state": {
+    "cycle": 0,
+    "timestamp": "2026-11-25T00:00:00Z",
+    "temperature": 45.0,
+    "output_units": 0,
+    "total_output": 0,
+    "defect_rate": 1.0,
+    "raw_material": 500,
+    "status": "NORMAL",
+    "last_event": "시스템 초기화 완료"
+  },
+  "config": {
+    "conveyor_speed": 75,
+    "cooling_power": 50,
+    "auto_restock": false
+  },
+  "history": []
+}

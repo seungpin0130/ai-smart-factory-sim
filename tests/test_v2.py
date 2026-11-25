@@ -73,11 +73,12 @@ class V2Tests(unittest.TestCase):
     def test_queued_stale_config_is_rejected_without_advancing_state(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
-            (root/'state.json').write_text(state().model_dump_json())
+            before = state().model_dump_json()
+            (root/'state.json').write_text(before)
             (root/'config.json').write_text(config().model_dump_json())
             with self.assertRaises(ValueError):
                 run(root,control_json=config().model_dump_json(),expected_config_sha='a'*40)
-            self.assertEqual(json.loads((root/'state.json').read_text())['cycle'],0)
+            self.assertEqual((root/'state.json').read_text(), before)
 
     def test_queued_fresh_config_and_history_window(self):
         with tempfile.TemporaryDirectory() as directory:

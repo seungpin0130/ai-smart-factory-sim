@@ -60,3 +60,16 @@ python -m unittest discover -s tests -v
 ```
 
 물량/WIP, PM·램프업, 임계값, 에너지, 이벤트 소집과 의장 교대, 공급자 오류, GitHub Issue 중복 방지, 스키마·SHA 충돌을 검증합니다. 공급자 SDK 검사는 모의 HTTP 응답을 사용합니다.
+
+### 실제 OpenAI·Gemini 연결 검증
+
+두 API 키를 GitHub Secrets에 등록한 뒤 기본 브랜치에서
+`Live OpenAI and Gemini council smoke test`를 수동 실행합니다. 로컬에서는 두 키를
+환경 변수로 설정한 뒤 `python verify_live_council.py`를 실행합니다.
+
+연속된 두 가상 사이클에서 3턴 토론을 강제해 OpenAI와 Gemini가 각각
+한 번씩 의장을 맡습니다. 정상 완료 시 공급자별 요청은 3회이며 재시도와 API
+사용료가 발생할 수 있습니다. 두 토론의 응답이 모두 스키마 검증을 통과해야
+성공합니다. 키가 없거나 호출 또는 응답 검증이 실패하면 종료 코드 1을 반환합니다.
+로그에는 의장, 검증 결과, 실패 시 완료된 턴 수와 예외 유형만 남깁니다.
+팹 상태 파일, GitHub 커밋, 장애 Issue에는 쓰지 않습니다.

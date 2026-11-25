@@ -44,7 +44,7 @@ class SDKContractTests(unittest.TestCase):
             httpx_client=httpx.Client(transport=httpx.MockTransport(gemini_handler),trust_env=False),
             async_client_args={"trust_env":False}))
         try:
-            record=deliberate(state(),config(),"live",council)
+            record=deliberate(state(cycle=2),config(),"live",council,force=True)
         finally:
             council.openai.close()
             council.gemini.close()

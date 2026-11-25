@@ -283,11 +283,11 @@
       </div>
 
       <div class="col-lg-7 auth-form-side">
-        <h4 class="fw-bold mb-1">관리자 시스템 로그인 (RBAC SSO)</h4>
-        <p class="text-secondary small mb-4">선택한 직무 권한에 따라 레시피 제어 및 설비 정비(PM/BM) 권한이 차등 적용됩니다.</p>
+        <h4 class="fw-bold mb-1">운영자 로그인</h4>
+        <p class="text-secondary small mb-4" id="auth-mode-text">시연 모드에서는 직무를 선택합니다.</p>
 
         <form id="login-form">
-        <p class="small text-secondary">로컬 시연용 직무 선택입니다. 실제 비밀번호를 입력하지 마세요.</p>
+          <p id="auth-error" class="small text-danger" role="status"></p>
           <div class="mb-3">
             <label class="form-label small fw-semibold text-secondary">사번 / 엔지니어 ID</label>
             <div class="input-group">
@@ -296,15 +296,15 @@
             </div>
           </div>
 
-          <div class="mb-3">
-            <label class="form-label small fw-semibold text-secondary">SSO 비밀번호</label>
+          <div class="mb-3" id="operator-password-row" hidden>
+            <label class="form-label small fw-semibold text-secondary" for="login-pw">운영자 비밀번호</label>
             <div class="input-group">
               <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-shield-lock"></i></span>
-              <input type="password" id="login-pw" autocomplete="off" aria-label="시연용 입력" class="form-control bg-dark text-white border-secondary" value="••••••••••••" required />
+              <input type="password" id="login-pw" class="form-control bg-dark text-white border-secondary" autocomplete="current-password" />
             </div>
           </div>
 
-          <div class="mb-3">
+          <div class="mb-3" id="demo-role-row">
             <label class="form-label small fw-semibold text-secondary">접속 직무 권한 (RBAC Role)</label>
             <select id="login-role" class="form-select bg-dark text-white border-secondary">
               <option value="Fab 생산관리 총괄">Fab 생산관리 총괄 (전체 레시피·정비·AI 승인 권한)</option>
@@ -782,6 +782,17 @@
           <h6 class="fw-bold mb-3">A/B 시나리오별 ETCH_01 잔여 수명(RUL %) 및 EDS 수율 비교 추이</h6>
           <div style="height: 290px;"><canvas id="ab-compare-chart"></canvas></div>
         </div>
+        <section class="admin-card p-3 mt-3" aria-labelledby="benchmark-study-title">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="mb-0" id="benchmark-study-title">다중 시드 벤치마크</h5>
+            <button id="btn-run-benchmark-study" class="btn btn-sm btn-outline-info" type="button">5개 시드 · 96틱 실행</button>
+          </div>
+          <p id="benchmark-study-status" class="small text-secondary" role="status"></p>
+          <table class="table table-sm">
+            <thead><tr><th>지표</th><th>Baseline 평균</th><th>Auto-Pilot 평균</th><th>평균 차이</th><th>비교 시드</th></tr></thead>
+            <tbody id="benchmark-study-results"></tbody>
+          </table>
+        </section>
       </section>
 
       <!-- =====================================================
@@ -944,10 +955,43 @@
       document.getElementById('btn-apply-params').disabled = !allowRecipe && !allowMaint;
     }
 
+    let operatorAuth = false;
+    const authReady = location.protocol === 'file:' ? Promise.resolve() :
+      fetch('/api/auth/status').then(async response => {
+        if (!response.ok) return;
+        operatorAuth = (await response.json()).required === true;
+        document.getElementById('demo-role-row').hidden = operatorAuth;
+        document.getElementById('operator-password-row').hidden = !operatorAuth;
+        document.getElementById('login-pw').required = operatorAuth;
+        document.getElementById('auth-mode-text').textContent = operatorAuth
+          ? '서버에 등록된 계정으로 로그인합니다.' : '로컬 시연 모드에서 사용할 직무를 선택합니다.';
+      }).catch(() => {});
+
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      currentUser.id = document.getElementById('login-emp-id').value.trim() || "M16-ENG-2048";
-      currentUser.role = document.getElementById('login-role').value;
+      await authReady;
+      const actor = document.getElementById('login-emp-id').value.trim();
+      if (operatorAuth) {
+        const error = document.getElementById('auth-error');
+        try {
+          const password = document.getElementById('login-pw');
+          const body = JSON.stringify({actor_id: actor, password: password.value});
+          password.value = '';
+          const response = await fetch('/api/auth/login', {method:'POST',
+            headers:{'Content-Type':'application/json'}, body});
+          if (!response.ok) throw new Error(response.status === 429 ? '잠시 후 다시 시도하세요.' : '로그인에 실패했습니다.');
+          const login = await response.json();
+          currentUser.id = login.actor_id;
+          currentUser.role = login.role;
+          error.textContent = '';
+        } catch (failure) {
+          error.textContent = failure.message || '서버에 연결하지 못했습니다.';
+          return;
+        }
+      } else {
+        currentUser.id = actor || 'M16-ENG-2048';
+        currentUser.role = document.getElementById('login-role').value;
+      }
 
       document.getElementById('sidebar-user-name').innerText = currentUser.id;
       document.getElementById('sidebar-user-role').innerText = currentUser.role;
@@ -963,7 +1007,11 @@
       connectWebSocket();
     });
 
-    function doLogout() {
+    async function doLogout() {
+      if (operatorAuth) {
+        const response = await fetch('/api/auth/logout', {method:'POST'}).catch(() => null);
+        if (!response?.ok && response?.status !== 401) return;
+      }
       if (ws) { ws.close(); ws = null; }
       document.getElementById('admin-shell').classList.remove('active');
       document.getElementById('view-login').classList.remove('d-none');
@@ -988,6 +1036,7 @@
     // 3. FASTAPI & WEBSOCKET REAL-TIME SYNC
     // ==========================================
     function authHeaders() {
+      if (operatorAuth) return {"Content-Type": "application/json"};
       return {
         "Content-Type": "application/json",
         "X-Actor-Id": encodeURIComponent(currentUser.id),
@@ -1016,6 +1065,7 @@
       if (e.queue_min != null) pieces.push(`대기 ${e.queue_min}분`);
       if (e.q_time_limit_min != null) pieces.push(`한도 ${e.q_time_limit_min}분`);
       if (e.planned_process_min != null) pieces.push(`계획 처리 ${e.planned_process_min}분`);
+      if (e.minimum_good_dies != null) pieces.push(`검사 기준 ${e.minimum_good_dies}/${e.dies_per_wafer} 다이 · 웨이퍼별 양품 다이 ${e.good_dies_per_wafer.join(', ')}`);
       if (e.process_min != null) pieces.push(`처리 ${e.process_min}분 · 온도 ${e.temperature_in_c} → ${e.temperature_c}°C`,
         `압력 ${e.pressure_mtorr} mTorr · RF ${e.rf_power_w} W`,
         `CD ${e.predicted_cd_nm}/${e.target_cd_nm} nm · FDC T² ${e.fdc_t2} · APC ${e.apc_offset_nm} nm`);
@@ -1169,6 +1219,9 @@
         if (msg.lot_events) {
           mergeLotEvents(msg.lot_events);
           showLotTransfers(msg.lot_events);
+        }
+        if (msg.type === 'ERROR') {
+          document.getElementById('ws-status-text').textContent = msg.detail;
         }
         if (msg.latest_decision) {
           renderAiCouncilCard(msg.latest_decision);
@@ -1876,6 +1929,32 @@
     // ==========================================
     // 6. A/B SCENARIO BENCHMARK & REPORTS
     // ==========================================
+    document.getElementById('btn-run-benchmark-study').addEventListener('click', async e => {
+      const button = e.currentTarget;
+      const status = document.getElementById('benchmark-study-status');
+      const results = document.getElementById('benchmark-study-results');
+      const labels = {accepted_wafers:'양품 웨이퍼 (매)', on_time_pct:'정시 완료율 (%)',
+        cost_per_accepted_usd:'양품당 모델 원가 (USD)', q_time_violations:'Q-Time 위반 (건)', udt_breakdowns:'돌발고장 (회)'};
+      button.disabled = true;
+      status.textContent = '동일한 5개 시드로 두 운전 방식을 비교하고 있습니다.';
+      results.replaceChildren();
+      try {
+        const response = await fetch('/api/fab/benchmark-study', {method:'POST', headers:authHeaders(), body:'{}'});
+        if (!response.ok) throw new Error('벤치마크를 실행하지 못했습니다.');
+        const data = await response.json();
+        for (const [name, metric] of Object.entries(data.paired)) {
+          const row = results.insertRow();
+          for (const value of [labels[name], metric.baseline_mean, metric.autopilot_mean,
+            metric.mean_delta, metric.compared_seeds]) row.insertCell().textContent = value ?? '—';
+        }
+        status.textContent = `각 시드 ${data.ticks}틱 · 신규 투입 Lot의 모의 납기 ${data.due_minutes}분`;
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
     document.getElementById('btn-run-benchmark').addEventListener('click', async () => {
       const ticks = Number(document.getElementById('ab-ticks-sel').value);
       if (!backendConnected) {

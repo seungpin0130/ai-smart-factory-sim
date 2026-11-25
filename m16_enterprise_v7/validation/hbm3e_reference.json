@@ -1,0 +1,82 @@
+{
+  "source": "Synthetic release-to-probe acceptance scenario. Analytic baseline from declared recipe times, bay spacing, 3.2 m/s speed, 18 s handling, and 15 min dispatch clock.",
+  "seed": 2026,
+  "wafers": 25,
+  "dies_per_wafer": 100,
+  "min_good_dies": 92,
+  "max_tick_count": 72,
+  "steps": [
+    {
+      "step": "WET_CLEAN_L1",
+      "queue_min": 0,
+      "process_min": 13.6,
+      "completed_minute": 14.098
+    },
+    {
+      "step": "EUV_LITHO_L1",
+      "queue_min": 0.9,
+      "process_min": 22.0,
+      "completed_minute": 37.498
+    },
+    {
+      "step": "DRY_ETCH_L1",
+      "queue_min": 7.5,
+      "process_min": 23.6,
+      "completed_minute": 69.098
+    },
+    {
+      "step": "ALD_HKMG_L1",
+      "queue_min": 5.9,
+      "process_min": 21.6,
+      "completed_minute": 97.098
+    },
+    {
+      "step": "CMP_PLANAR_L1",
+      "queue_min": 7.9,
+      "process_min": 16.8,
+      "completed_minute": 122.298
+    },
+    {
+      "step": "INLINE_CD_SEM",
+      "queue_min": 12.7,
+      "process_min": 9.0,
+      "completed_minute": 144.894
+    },
+    {
+      "step": "EUV_LITHO_L2",
+      "queue_min": 5.11,
+      "process_min": 24.4,
+      "completed_minute": 174.7
+    },
+    {
+      "step": "HARC_ETCH_L2",
+      "queue_min": 5.3,
+      "process_min": 31.5,
+      "completed_minute": 211.998
+    },
+    {
+      "step": "GAPFILL_CVD_L2",
+      "queue_min": 13.0,
+      "process_min": 24.6,
+      "completed_minute": 250.098
+    },
+    {
+      "step": "TSV_ETCH_CU",
+      "queue_min": 4.9,
+      "process_min": 31.6,
+      "completed_minute": 287.296
+    },
+    {
+      "step": "HYBRID_BOND",
+      "queue_min": 12.7,
+      "process_min": 29.4,
+      "completed_minute": 329.7
+    },
+    {
+      "step": "EDS_PROBE_TEST",
+      "queue_min": 0.3,
+      "process_min": 14.8,
+      "completed_minute": 345.298
+    }
+  ]
+}

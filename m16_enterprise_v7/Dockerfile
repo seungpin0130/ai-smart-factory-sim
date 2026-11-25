@@ -10,6 +10,7 @@ RUN --mount=type=secret,id=pip_ca \
 
 COPY backend ./backend
 COPY frontend ./frontend
+COPY validation ./validation
 
 EXPOSE 8000
 

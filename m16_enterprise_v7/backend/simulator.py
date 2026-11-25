@@ -1,6 +1,7 @@
 from __future__ import annotations
 import math
 import random
+from collections import Counter
 from dataclasses import dataclass
 from uuid import uuid4
 from enum import Enum
@@ -60,6 +61,9 @@ class FoupLot:
     attempt: int = 0
     accepted_wafers: int = 0
     rejected_wafers: int = 0
+    released_minute: float = 0.0
+    new_release: bool = False
+    finished_minute: float | None = None
 
     @property
     def current_step(self) -> Optional[ProcessStep]:
@@ -121,8 +125,10 @@ class EquipmentTool:
 
 
 class M16SemiconFabSimulator:
-    def __init__(self, seed: int = 2026):
+    def __init__(self, seed: int = 2026, *, automatic_releases=True, random_failures=True):
         self.seed = seed
+        self.automatic_releases = automatic_releases
+        self.random_failures = random_failures
         self.rng = random.Random(seed)
         self.tick = 100
         self.tick_minutes = 15.0
@@ -135,6 +141,8 @@ class M16SemiconFabSimulator:
         self.total_q_time_violations = 0
         self.total_udt_events = 0
         self.extra_maint_cost_usd = 0.0
+        self.last_power_kw = 380.0
+        self.last_eds_yield = 98.45
 
         self.tools: Dict[str, EquipmentTool] = {
             "CLEAN_01":   EquipmentTool("CLEAN_01",   "CLEAN",   "BAY_01", 2, chamber_temp_c=23.0, opt_temp_c=23.0, rf_on_hours=60,  max_rf_hours=600),
@@ -150,9 +158,12 @@ class M16SemiconFabSimulator:
         self.wip_lots: List[FoupLot] = []
         self.completed_lots: List[FoupLot] = []
         self.oht_vehicles_total = 32
-        self.oht_active_transfers = 14
-        self.oht_congestion_pct = 43.8
-        self.oht_avg_delivery_sec = 55.7
+        self.oht_avg_delivery_sec = 0.0
+        self.oht_active_transfers = 0
+        self.oht_congestion_pct = 0.0
+        self.stocker_slots = {f"STOCKER_BAY_{i:02d}": 4 for i in range(1, 8)}
+        self.stocker_slots["STOCKER_A"] = 24
+        self.oht_dispatch_waiting = 0
 
         for i in range(18):
             lot = self._create_new_lot(priority="HOT_LOT" if i % 5 == 0 else "NORMAL")
@@ -176,8 +187,12 @@ class M16SemiconFabSimulator:
     def release_lot(self, wafer_count=25, priority="NORMAL", *, source="AUTO", fab_minute=None):
         if not 1 <= wafer_count <= 25:
             raise ValueError("A FOUP must contain 1–25 wafers")
+        if not self.can_release():
+            raise ValueError("No intake stocker capacity")
         lot = self._create_new_lot(priority)
         lot.wafer_count = wafer_count
+        lot.new_release = True
+        lot.released_minute = (self.tick - 100) * self.tick_minutes if fab_minute is None else fab_minute
         self.wip_lots.append(lot)
         self.released_wafers += wafer_count
         self._record_lot("LOT_RELEASED", lot, fab_minute=fab_minute, source=source,
@@ -239,7 +254,7 @@ class M16SemiconFabSimulator:
             tool.chamber_temp_c = tool.opt_temp_c
             tool.fdc_t2_score = 1.05
             self.extra_maint_cost_usd += 1200.0
-            self._interrupt_lot(tool, f"STOCKER_{tool.bay_id}", tool.downtime_reason)
+            self._interrupt_lot(tool, "STOCKER_RECOVERY", tool.downtime_reason)
         elif action == "BM":
             tool.state = SemiE10State.UDT
             tool.downtime_reason = "INJECTED_RF_ARCING_BM"
@@ -247,60 +262,110 @@ class M16SemiconFabSimulator:
             tool.rf_on_hours = tool.max_rf_hours
             self.total_udt_events += 1
             self.extra_maint_cost_usd += 4800.0
-            self._interrupt_lot(tool, f"STOCKER_{tool.bay_id}", tool.downtime_reason, .028)
+            self._interrupt_lot(tool, "STOCKER_RECOVERY", tool.downtime_reason, .028)
 
         return self.snapshot()
 
-    def _dispatch_oht_and_lots(self, tick_start: float):
-        dispatched = []
+    def stocker_occupancy(self):
+        slots = Counter(lot.location for lot in self.wip_lots if lot.location.startswith("STOCKER"))
         for tool in self.tools.values():
-            if tool.state == SemiE10State.SBY and tool.active_lot is None:
-                candidates = [
-                    l for l in self.wip_lots
-                    if l.current_step and l.current_step.tool_group == tool.tool_group
-                    and l.location.startswith("STOCKER")
-                ]
-                if not candidates:
+            if tool.active_lot and tool.active_lot.route_idx < len(M16_HBM3E_ROUTE) - 1:
+                slots[f"STOCKER_{tool.bay_id}"] += 1
+        return slots
+
+    def can_release(self):
+        return (len(self.wip_lots) < 26
+                and self.stocker_occupancy()["STOCKER_A"] < self.stocker_slots["STOCKER_A"])
+
+    def _dispatch_oht_and_lots(self, tick_start: float):
+        slots = self.stocker_occupancy()
+        reservations = []
+        next_vehicle = [0.0] * self.oht_vehicles_total
+        next_segment = {}
+        blocked = 0
+        for tool in self.tools.values():
+            if tool.state != SemiE10State.SBY or tool.active_lot is not None:
+                continue
+            candidates = [
+                lot for lot in self.wip_lots
+                if lot.current_step and lot.current_step.tool_group == tool.tool_group
+                and lot.location.startswith("STOCKER")
+            ]
+
+            def priority(lot):
+                limit = lot.current_step.q_time_limit_min
+                urgent = limit is not None and limit - lot.wait_min_at_step < 45
+                return urgent, lot.priority == "HOT_LOT", lot.wait_min_at_step, -lot.released_minute
+
+            for lot in sorted(candidates, key=priority, reverse=True):
+                source = lot.location
+                destination = f"STOCKER_{tool.bay_id}"
+                needs_slot = lot.route_idx < len(M16_HBM3E_ROUTE) - 1
+                if needs_slot and source != destination and slots[destination] >= self.stocker_slots[destination]:
+                    blocked += 1
                     continue
+                if not next_vehicle:
+                    blocked += 1
+                    break
 
-                def dispatch_score(lot: FoupLot) -> Tuple[int, float]:
-                    step = lot.current_step
-                    q_urgency = 0
-                    if step and step.q_time_limit_min:
-                        remain = step.q_time_limit_min - lot.wait_min_at_step
-                        if remain < 45.0:
-                            q_urgency = 2
-                    hot = 1 if lot.priority == "HOT_LOT" else 0
-                    return (q_urgency * 10 + hot, lot.wait_min_at_step)
-
-                candidates.sort(key=dispatch_score, reverse=True)
-                chosen = candidates[0]
-                source = chosen.location
-                chosen.location = f"LOADPORT_{tool.tool_id}"
-                tool.active_lot = chosen
+                # Synthetic bay coordinates at 38 m intervals; opposite directions share one segment.
+                origin = int(source[-2:]) if source.startswith("STOCKER_BAY_") else 0
+                target = int(tool.bay_id[-2:])
+                segments = list(range(origin, target)) if origin < target else list(range(origin - 1, target - 1, -1))
+                vehicle = min(range(len(next_vehicle)), key=next_vehicle.__getitem__)
+                depart = next_vehicle[vehicle]
+                finish = depart + 9
+                reserved = {}
+                for segment in segments:
+                    finish = max(finish, next_segment.get(segment, 0)) + 38 / 3.2
+                    reserved[segment] = finish
+                finish += 9
+                if finish >= self.tick_minutes * 60:
+                    blocked += 1
+                    continue
+                next_vehicle[vehicle] = finish
+                next_segment.update(reserved)
+                slots[source] -= 1
+                if needs_slot:
+                    slots[destination] += 1
+                lot.location = f"LOADPORT_{tool.tool_id}"
+                lot.attempt += 1
+                tool.active_lot = lot
                 tool.state = SemiE10State.PRD
-                step = chosen.current_step
-                speed_factor = max(.05, tool.feed_rate * tool.load_ratio * (1.0 + .08 * (tool.chamber_count - 1)))
+                speed = max(.05, tool.feed_rate * tool.load_ratio * (1 + .08 * (tool.chamber_count - 1)))
                 tool.proc_start_temp_c = tool.chamber_temp_c
-                tool.proc_total_min = tool.proc_remain_min = round(step.std_process_min / speed_factor, 1)
-                chosen.attempt += 1
-                dispatched.append((tool, chosen, source))
+                tool.proc_total_min = tool.proc_remain_min = round(lot.current_step.std_process_min / speed, 1)
+                reservations.append((tool, lot, source, depart, finish))
+                break
 
-        transfers = len(dispatched)
-        self.oht_active_transfers = min(self.oht_vehicles_total, 10 + transfers * 3 + len(self.wip_lots) // 3)
-        self.oht_congestion_pct = round(min(98.0, (self.oht_active_transfers / self.oht_vehicles_total) * 100.0), 1)
-        congestion_penalty = max(0.0, (self.oht_congestion_pct - 75.0) * 1.8)
-        self.oht_avg_delivery_sec = round(48.0 + self.oht_active_transfers * 0.55 + congestion_penalty, 1)
-        transfer_minutes = self.oht_avg_delivery_sec / 60
-        for tool, lot, source in dispatched:
-            self._record_lot("OHT_TRANSFER", lot, fab_minute=tick_start, tool=tool,
-                             source=source, destination=lot.location, transfer_sec=self.oht_avg_delivery_sec,
+        self.oht_dispatch_waiting = blocked
+        self.oht_active_transfers = sum(value > 0 for value in next_vehicle)
+        self.oht_congestion_pct = round(100 * self.oht_active_transfers / self.oht_vehicles_total, 1) if next_vehicle else 0
+        self.oht_avg_delivery_sec = round(sum(end - start for _, _, _, start, end in reservations)
+                                          / len(reservations), 1) if reservations else 0
+        for tool, lot, source, depart, finish in reservations:
+            elapsed = finish / 60
+            wait = lot.wait_min_at_step + depart / 60
+            self._record_lot("OHT_TRANSFER", lot, fab_minute=tick_start + depart / 60, tool=tool,
+                             source=source, destination=lot.location, transfer_sec=round(finish - depart, 1),
                              congestion_pct=self.oht_congestion_pct)
-            self._record_lot("PROCESS_STARTED", lot, fab_minute=tick_start + transfer_minutes, tool=tool,
-                             wafers_in=lot.wafer_count, queue_min=round(lot.wait_min_at_step, 2),
+            self._check_q_time(lot, wait, tick_start + depart / 60)
+            self._record_lot("PROCESS_STARTED", lot, fab_minute=tick_start + elapsed, tool=tool,
+                             wafers_in=lot.wafer_count, queue_min=round(wait, 2),
                              planned_process_min=tool.proc_total_min)
-            lot.total_cycle_min += transfer_minutes
-        return {tool.tool_id: transfer_minutes for tool, _, _ in dispatched}
+            lot.total_cycle_min += elapsed
+        return {tool.tool_id: end / 60 for tool, _, _, _, end in reservations}
+
+    def _check_q_time(self, lot, wait, fab_minute):
+        step = lot.current_step
+        if (step and step.q_time_limit_min is not None and not lot.q_time_recorded
+                and wait > step.q_time_limit_min):
+            lot.q_time_violations += 1
+            self.total_q_time_violations += 1
+            lot.defect_density_d0 += .006
+            lot.q_time_recorded = True
+            self._record_lot("Q_TIME_EXCEEDED", lot, fab_minute=fab_minute, queue_min=round(wait, 2),
+                             q_time_limit_min=step.q_time_limit_min)
 
     def _update_fdc_and_apc(self, tool: EquipmentTool, step: ProcessStep, lot: FoupLot) -> None:
         wear = tool.rf_on_hours / tool.max_rf_hours
@@ -332,7 +397,7 @@ class M16SemiconFabSimulator:
 
         tick_start = (self.tick - 101) * dt
         euv_feed = self.tools["EUV_01"].feed_rate
-        if len(self.wip_lots) < int(26 * euv_feed) and self.rng.random() < (0.68 * euv_feed):
+        if self.automatic_releases and self.can_release() and len(self.wip_lots) < int(26 * euv_feed) and self.rng.random() < (0.68 * euv_feed):
             self.release_lot(priority="HOT_LOT" if self.tick % 6 == 0 else "NORMAL", fab_minute=tick_start)
 
         transfer_minutes = self._dispatch_oht_and_lots(tick_start)
@@ -340,15 +405,7 @@ class M16SemiconFabSimulator:
             if lot.location.startswith("STOCKER"):
                 lot.wait_min_at_step += dt
                 lot.total_cycle_min += dt
-                step = lot.current_step
-                if (step and step.q_time_limit_min is not None and not lot.q_time_recorded
-                        and lot.wait_min_at_step > step.q_time_limit_min):
-                    lot.q_time_violations += 1
-                    self.total_q_time_violations += 1
-                    lot.defect_density_d0 += 0.006
-                    lot.q_time_recorded = True
-                    self._record_lot("Q_TIME_EXCEEDED", lot, queue_min=round(lot.wait_min_at_step, 2),
-                                     q_time_limit_min=step.q_time_limit_min)
+                self._check_q_time(lot, lot.wait_min_at_step, tick_start + dt)
 
         total_power_kw = 380.0 + self.oht_active_transfers * 3.8
         tick_completed_yields: List[float] = []
@@ -417,13 +474,20 @@ class M16SemiconFabSimulator:
                         lot.total_cycle_min += lot.wait_min_at_step
                     else:
                         eds_y = self._compute_eds_yield(lot)
-                        lot.accepted_wafers = min(lot.wafer_count, math.floor(lot.wafer_count * eds_y / 100 + .5))
+                        inspection_rng = random.Random(f"{self.seed}:{lot.lot_id}:EDS")
+                        dies_per_wafer = 100
+                        min_good_dies = 92
+                        die_counts = [sum(inspection_rng.random() < eds_y / 100 for _ in range(dies_per_wafer))
+                                      for _ in range(lot.wafer_count)]
+                        lot.accepted_wafers = sum(count >= min_good_dies for count in die_counts)
                         lot.rejected_wafers = lot.wafer_count - lot.accepted_wafers
+                        lot.finished_minute = finished_minute
                         self._record_lot(
                             "LOT_DISPOSITION", lot, fab_minute=finished_minute, tool=tool,
                             source=destination, accepted_destination="FG_STOCKER", rejected_destination="QA_HOLD",
                             wafers_out=lot.wafer_count, accepted_wafers=lot.accepted_wafers,
-                            rejected_wafers=lot.rejected_wafers, modeled_die_yield_pct=eds_y,
+                            rejected_wafers=lot.rejected_wafers, modeled_die_yield_pct=eds_y, good_dies_per_wafer=die_counts,
+                            dies_per_wafer=dies_per_wafer, minimum_good_dies=min_good_dies,
                             cycle_min=round(lot.total_cycle_min, 2), q_time_violations=lot.q_time_violations,
                             cumulative_cd_error_nm=round(lot.cumulative_cd_error_nm, 3),
                         )
@@ -447,7 +511,7 @@ class M16SemiconFabSimulator:
                 tool.time_sby += dt
                 total_power_kw += 65.0
 
-            if tool.rul_pct < 16.0 and self.rng.random() < 0.22:
+            if self.random_failures and tool.rul_pct < 16.0 and self.rng.random() < 0.22:
                 tool.state = SemiE10State.UDT
                 tool.downtime_reason = "RF_GENERATOR_ARCING_FAULT"
                 tool.downtime_remain_min = 90.0
@@ -455,28 +519,17 @@ class M16SemiconFabSimulator:
                 self.extra_maint_cost_usd += 4800.0
                 self._interrupt_lot(tool, "STOCKER_RECOVERY", tool.downtime_reason, .025)
 
-        return self.snapshot(
-            override_power_kw=round(total_power_kw, 1),
-            tick_completed_yields=tick_completed_yields,
-        )
-
-    def snapshot(
-        self,
-        override_power_kw: Optional[float] = None,
-        tick_completed_yields: Optional[List[float]] = None,
-    ) -> Dict:
+        self.last_power_kw = round(total_power_kw, 1)
         if tick_completed_yields:
-            avg_yield = round(sum(tick_completed_yields) / len(tick_completed_yields), 2)
-        elif self.completed_lots:
-            recent = self.completed_lots[-3:]
-            avg_yield = round(sum(self._compute_eds_yield(l) for l in recent) / len(recent), 2)
-        else:
-            avg_yield = 98.45
+            self.last_eds_yield = round(sum(tick_completed_yields) / len(tick_completed_yields), 2)
+        return self.snapshot()
 
+    def snapshot(self, override_power_kw: Optional[float] = None) -> Dict:
+        avg_yield = self.last_eds_yield
         avg_avail = round(sum(t.availability_pct for t in self.tools.values()) / len(self.tools), 1)
         perf_pct = round(min(100.0, (len(self.wip_lots) / 22.0) * 94.0), 1)
         oee_pct = round((avg_avail / 100.0) * (perf_pct / 100.0) * (avg_yield / 100.0) * 100.0, 1)
-        power_kw = override_power_kw if override_power_kw is not None else 1185.0
+        power_kw = override_power_kw if override_power_kw is not None else self.last_power_kw
         completed_wafers = max(25, sum(lot.wafer_count for lot in self.completed_lots))
         unit_cost = round(
             1090.0 + (power_kw / 18.0) + (100.0 - avg_yield) * 32.0 + (self.extra_maint_cost_usd / completed_wafers),
@@ -507,6 +560,9 @@ class M16SemiconFabSimulator:
                 "total_vehicles": self.oht_vehicles_total,
                 "congestion_pct": self.oht_congestion_pct,
                 "avg_delivery_sec": self.oht_avg_delivery_sec,
+                "dispatch_waiting": self.oht_dispatch_waiting,
+                "stocker_slots": {name: {"used_or_reserved": self.stocker_occupancy()[name], "capacity": limit}
+                                  for name, limit in self.stocker_slots.items()},
             },
             "tools": {
                 tid: {

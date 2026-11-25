@@ -161,3 +161,105 @@ def test_interrupted_lot_is_held_and_retried_without_extra_release():
     starts = [e for e in sim.lot_events if e["event"] == "PROCESS_STARTED" and e["tool_id"] == "EUV_01"]
     assert [e["attempt"] for e in starts] == [1, 2]
     assert sim.released_wafers == 11
+
+
+def test_independent_reference_and_material_inspection():
+    from backend.validation import validate_reference
+    result = validate_reference()
+    assert result["passed"], result["mismatches"]
+    assert result["steps"] == 12
+    assert result["accepted_wafers"] + result["qa_hold_wafers"] == 25
+
+
+def test_logistics_reserves_stocker_slots_and_serializes_one_vehicle():
+    sim = M16SemiconFabSimulator(automatic_releases=False, random_failures=False)
+    sim.wip_lots.clear()
+    sim.lot_events.clear()
+    clean = sim.release_lot()
+    euv = sim.release_lot()
+    euv.route_idx = 1
+    sim.stocker_slots["STOCKER_BAY_01"] = 0
+    sim.oht_vehicles_total = 1
+    sim.step()
+    assert clean.location == "STOCKER_A"
+    assert euv.location == "LOADPORT_EUV_01"
+    assert sim.oht_dispatch_waiting > 0
+    sim.stocker_slots["STOCKER_BAY_01"] = 1
+    metrology = sim.release_lot()
+    metrology.route_idx = 5
+    sim.step()
+    moves = [event for event in sim.lot_events if event["tick"] == sim.tick and event["event"] == "OHT_TRANSFER"]
+    assert len(moves) == 2
+    assert moves[1]["fab_minute"] >= moves[0]["fab_minute"] + moves[0]["transfer_sec"] / 60 - .002
+    assert all(sim.stocker_occupancy()[place] <= capacity for place, capacity in sim.stocker_slots.items())
+
+
+def test_checkpoint_restores_pending_approval_and_active_lots(enterprise):
+    from backend import checkpoint
+    from backend.models import FabCheckpoint
+
+    client, sessions = enterprise
+    assert client.post("/api/fab/mode", headers=actor("manager"), json={"ai_control_mode": "HITL"}).is_success
+    assert client.post("/api/fab/simulate", json={"ticks": 2}).is_success
+    saved = client.get("/api/fab/state").json()
+    assert saved["pending_ai_decision"] is not None
+    with sessions() as db:
+        payload = db.get(FabCheckpoint, 1).payload
+    expected = checkpoint.restore(payload["sim"])
+    before = expected.step()
+    with TestClient(main.app) as reloaded:
+        recovered = reloaded.get("/api/fab/state").json()
+        assert recovered["snapshot"] == saved["snapshot"]
+        assert recovered["pending_ai_decision"] == saved["pending_ai_decision"]
+        actual = reloaded.post("/api/fab/simulate", json={"ticks": 1}).json()["snapshots"][0]
+        assert actual == before
+        assert reloaded.post("/api/fab/ai/approve", headers=actor("manager", "SHIFT-B")).json()["status"] == "APPROVED"
+
+
+def test_paired_benchmark_uses_same_horizons_and_preserves_live_state(enterprise):
+    client, _ = enterprise
+    request = {"ticks": 40, "seeds": [11, 22]}
+    state = client.get("/api/fab/state").json()["snapshot"]
+    response = client.post("/api/fab/benchmark-study", json=request)
+    assert response.is_success, response.text
+    data = response.json()
+    assert [trial["seed"] for trial in data["trials"]] == [11, 22]
+    for key, metric in data["paired"].items():
+        counts = [trial["ai_autopilot"][key] - trial["baseline"][key] for trial in data["trials"]
+                  if trial["ai_autopilot"][key] is not None and trial["baseline"][key] is not None]
+        assert metric["compared_seeds"] == len(counts)
+        assert metric["mean_delta"] == (round(sum(counts) / len(counts), 2) if counts else None)
+    assert data == client.post("/api/fab/benchmark-study", json=request).json()
+    assert client.get("/api/fab/state").json()["snapshot"] == state
+
+
+def test_authenticated_operator_cannot_forge_role(enterprise, tmp_path, monkeypatch):
+    import json
+    from starlette.websockets import WebSocketDisconnect
+    from backend.auth import password_hash
+
+    _, sessions = enterprise
+    config = tmp_path / "operators.json"
+    password = "simulation-test-password"
+    config.write_text(json.dumps({"ENG": {"role": "engineer", "password_hash": password_hash(password)}}))
+    monkeypatch.setenv("M16_OPERATOR_FILE", str(config))
+    header = actor("manager", "FORGED")
+    with TestClient(main.app) as client:
+        assert client.get("/api/fab/state", headers=header).status_code == 401
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect("/ws/fab/live"):
+                pass
+        assert client.post("/api/auth/login", json={"actor_id":"ENG", "password":"wrong"}).status_code == 401
+        login = client.post("/api/auth/login", json={"actor_id":"ENG", "password":password})
+        assert login.is_success
+        assert "HttpOnly" in login.headers["set-cookie"] and "SameSite=strict" in login.headers["set-cookie"]
+        assert client.post("/api/fab/mode", headers=header, json={"live_streaming":True}).status_code == 403
+        assert client.post("/api/fab/lots", headers={"Origin":"https://elsewhere.test"}, json={"wafers":5}).status_code == 403
+        assert client.post("/api/fab/lots", headers=header, json={"wafers":5}).status_code == 201
+        with client.websocket_connect("/ws/fab/live") as ws:
+            assert ws.receive_json()["type"] == "INIT"
+        assert client.post("/api/auth/logout").is_success
+        assert client.get("/api/fab/state").status_code == 401
+    with sessions() as db:
+        release = db.query(AuditTrailLog).filter_by(action_type="LOT_RELEASE").one()
+        assert release.actor_id == "ENG"

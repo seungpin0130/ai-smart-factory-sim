@@ -78,3 +78,16 @@ class LotTraceEvent(Base):
     fab_minute = Column(Float, nullable=False)
     payload = Column(JSON, nullable=False)
     recorded_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class FabCheckpoint(Base):
+    __tablename__ = "fab_checkpoints"
+    id = Column(Integer, primary_key=True)
+    payload = Column(JSON, nullable=False)
+
+
+class OperatorSession(Base):
+    __tablename__ = "operator_sessions"
+    token_hash = Column(String(64), primary_key=True)
+    actor_id = Column(String(64), nullable=False)
+    expires_at = Column(Integer, nullable=False, index=True)

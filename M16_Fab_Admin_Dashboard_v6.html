@@ -637,6 +637,7 @@
                 <div>
                   <span class="text-secondary small fw-semibold">실시간 Fab 전력 부하</span>
                   <h3 class="fw-bold mt-1 mb-1" id="ov-kpi-power">1,210 kW</h3>
+                  <small id="ov-oht-power" class="text-info"></small>
                   <span class="badge bg-warning bg-opacity-10 text-warning small">OHT 반송 62.5초</span>
                 </div>
                 <div class="kpi-icon-circle bg-warning bg-opacity-10 text-warning">
@@ -754,6 +755,7 @@
           </div>
           <div class="d-flex align-items-center gap-2">
             <span class="badge bg-success px-3 py-2" id="twin-mode-badge">HISTORY REPLAY</span>
+            <span id="fab-api-status" class="small text-info" role="status"></span>
             <span class="badge bg-dark border border-secondary px-3 py-2" id="twin-hud-clock">Tick #103</span>
           </div>
         </div>
@@ -827,6 +829,7 @@
               <div class="d-flex justify-content-between small text-secondary mb-1">
                 <span>Plant Sim 배치 실행</span>
                 <span class="text-info" id="oht-summary-mini">OHT 22대 가동</span>
+                <div id="oht-route-details" class="text-info small"></div>
               </div>
               <div class="input-group input-group-sm">
                 <select id="sel-batch-ticks" class="form-select bg-dark text-white border-secondary">
@@ -1098,7 +1101,101 @@
       { id: "ALM-1031", tick: 103, time: "14:30", station: "ETCH", type: "PM", desc: "ETCH 식각 챔버 예방정비(PM) 완료 — RUL 100% 복원", ack: true }
     ];
 
-    let historyIdx = 2;
+    let replayHistory = MOCK_HISTORY;
+    let historyIdx = replayHistory.length - 1;
+    let apiConnected = false;
+    let apiBusy = false;
+    let scenarioId = null;
+
+    function showApiStatus(text) {
+      document.getElementById('fab-api-status').textContent = text;
+    }
+
+    async function requestFab(path, body) {
+      const response = await fetch(`/api/fab/${path}`, body ? {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      } : { cache: 'no-store', signal: AbortSignal.timeout(4000) });
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(typeof error?.detail === 'string' ? error.detail : `HTTP ${response.status}`);
+      }
+      return response.json();
+    }
+
+    function setApiBusy(busy) {
+      apiBusy = busy;
+      document.querySelectorAll(
+        '#btn-apply-params, #btn-exec-pm, #btn-exec-bm, #btn-run-sim, #timeline-slider, #btn-prev, #btn-next, #btn-play, #btn-reset-history'
+      ).forEach(control => { control.disabled = busy; });
+      if (busy && playTimer) {
+        clearInterval(playTimer);
+        playTimer = null;
+        document.getElementById('btn-play').innerHTML = '<i class="bi bi-play-fill"></i>';
+      }
+    }
+
+    async function loadServerReplay() {
+      if (location.protocol === 'file:') {
+        showApiStatus('브라우저 모의 모드');
+        return;
+      }
+      setApiBusy(true);
+      try {
+        const data = await requestFab('state');
+        if (!Array.isArray(data.history) || !data.history.length || !data.state?.oht_metrics) {
+          throw new Error('Invalid replay response');
+        }
+        apiConnected = true;
+        alarmLogs = [];
+        updateAlarmBadges();
+        renderAlarmTable();
+        replayHistory = data.history;
+        simulationRunArchive[0] = { id: 'default', name: 'SQLite 리플레이', snapshots: replayHistory };
+        slider.max = replayHistory.length - 1;
+        loadHistory(replayHistory.length - 1);
+        showApiStatus('Python 서버 연결');
+        if (document.getElementById('admin-shell').classList.contains('active')) {
+          if (document.getElementById('page-dashboard').classList.contains('active')) renderOverviewPage();
+          if (document.getElementById('page-reports').classList.contains('active')) renderReportDashboard();
+        }
+      } catch {
+        showApiStatus('브라우저 모의 모드');
+      } finally {
+        setApiBusy(false);
+      }
+    }
+
+    async function applyServerMutation(path, values, onSuccess) {
+      if (apiBusy) return;
+      setApiBusy(true);
+      try {
+        const source = scenarioId ? { scenario_id: scenarioId } : { base_tick: replayHistory[historyIdx].tick };
+        const result = await requestFab(path, { ...source, ...values });
+        scenarioId = result.scenario_id;
+        sandboxState = result.state;
+        syncVisuals(true);
+        if (path === 'control') {
+          alarmLogs.unshift({
+            id: `ALM-${crypto.randomUUID().slice(0, 8)}`,
+            tick: sandboxState.tick,
+            time: '방금 전',
+            station: values.station_id,
+            type: values.action === 'BM' ? 'CRITICAL' : (values.action || 'TUNED'),
+            desc: sandboxState.trigger_reason,
+            ack: values.action !== 'BM',
+          });
+          updateAlarmBadges();
+        }
+        showApiStatus('Python 서버 연결');
+        if (onSuccess) onSuccess(result);
+      } catch (error) {
+        showApiStatus(`요청 실패 · ${error.message}`);
+      } finally {
+        setApiBusy(false);
+      }
+    }
     let selectedStationId = 'PHOTO_EUV';
     let sandboxState = JSON.parse(JSON.stringify(MOCK_HISTORY[2]));
     let simulationRunArchive = [
@@ -1192,7 +1289,12 @@
 
       document.getElementById('ov-kpi-yield').innerText = `${lastSnap.kpi.eds_yield.toFixed(2)}%`;
       document.getElementById('ov-kpi-power').innerText = `${Math.round(lastSnap.kpi.power_kw).toLocaleString()} kW`;
-      document.getElementById('ov-kpi-cost').innerText = `$${Math.round(lastSnap.kpi.unit_cost).toLocaleString()}`;
+      document.getElementById('ov-kpi-cost').innerText = lastSnap.kpi.unit_cost == null
+        ? '—' : `$${Math.round(lastSnap.kpi.unit_cost).toLocaleString()}`;
+      const oht = lastSnap.oht_metrics;
+      document.getElementById('ov-oht-power').textContent = oht
+        ? `OHT ${oht.oht_power_kw.toFixed(1)} kW · 최대 혼잡 ${Math.round(Math.max(...Object.values(oht.routes).map(route => route.congestion_ratio)) * 100)}%`
+        : 'OHT 모의 데이터';
 
       const euv = lastSnap.equipments.PHOTO_EUV.rul;
       const etch = lastSnap.equipments.ETCH.rul;
@@ -1411,16 +1513,27 @@
 
     function syncVisuals(isCustom) {
       const badge = document.getElementById('twin-mode-badge');
-      badge.innerText = isCustom ? 'CUSTOM SANDBOX' : 'HISTORY REPLAY';
+      badge.innerText = isCustom ? 'CUSTOM SANDBOX' : (apiConnected ? 'SQLITE REPLAY' : 'DEMO REPLAY');
       badge.className = isCustom ? 'badge bg-primary px-3 py-2' : 'badge bg-success px-3 py-2';
 
       document.getElementById('twin-hud-clock').innerText = `Tick #${sandboxState.tick} | ${sandboxState.timestamp}`;
 
-      const euvFeed = sandboxState.equipments.PHOTO_EUV.feed_rate;
-      const activeOht = Math.round(18 * euvFeed + Math.max(0, sandboxState.wip_buffers.ETCH - 60) * 0.25);
-      const ohtSec = (56.0 + activeOht * 0.45).toFixed(1);
-      document.getElementById('oht-summary-mini').innerText = `OHT ${activeOht}대 (${ohtSec}s)`;
-
+      const oht = sandboxState.oht_metrics;
+      const routeDetails = document.getElementById('oht-route-details');
+      if (oht) {
+        document.getElementById('oht-summary-mini').textContent =
+          `OHT ${oht.active_vehicles}대 · ${oht.oht_power_kw.toFixed(1)} kW`;
+        routeDetails.textContent = Object.entries(oht.routes).map(([name, route]) =>
+          `${name.replace('_TO_', ' → ')} · ${route.transfer_time_sec.toFixed(1)}초 · 혼잡 ${Math.round(route.congestion_ratio * 100)}% · ${route.oht_power_kw.toFixed(1)} kW`
+        ).join(' | ');
+        const congestion = Math.max(...Object.values(oht.routes).map(route => route.congestion_ratio));
+        ohtTrack.material.color.setHex(congestion > .85 ? 0xf59e0b : 0x38bdf8);
+      } else {
+        const activeOht = Math.round(18 * sandboxState.equipments.PHOTO_EUV.feed_rate
+          + Math.max(0, sandboxState.wip_buffers.ETCH - 60) * 0.25);
+        document.getElementById('oht-summary-mini').textContent = `OHT 약 ${activeOht}대 · 모의`;
+        routeDetails.textContent = '';
+      }
       Object.entries(sandboxState.equipments).forEach(([eqId, st]) => {
         const mesh = fabMeshes[eqId];
         const wip = sandboxState.wip_buffers[eqId] ?? 0;
@@ -1444,7 +1557,12 @@
           const isGem = d.speaker.includes('Gemini');
           const div = document.createElement('div');
           div.className = `p-2 rounded border-start border-3 ${isGem ? 'border-primary bg-primary bg-opacity-10' : 'border-success bg-success bg-opacity-10'}`;
-          div.innerHTML = `<div class="fw-bold mb-1" style="font-size:11px;">${d.speaker}</div><div>${d.text}</div>`;
+          const speaker = document.createElement('div');
+          speaker.className = 'fw-bold mb-1 small';
+          speaker.textContent = d.speaker;
+          const text = document.createElement('div');
+          text.textContent = d.text;
+          div.append(speaker, text);
           feedEl.appendChild(div);
         });
       } else {
@@ -1458,6 +1576,16 @@
     }
 
     document.getElementById('btn-apply-params').addEventListener('click', () => {
+      if (apiConnected) {
+        applyServerMutation('control', {
+          station_id: selectedStationId,
+          feed_rate: Number(document.getElementById('inp-feed').value),
+          load_ratio: Number(document.getElementById('inp-load').value) / 100,
+          chamber_temp: Number(document.getElementById('inp-temp').value),
+          rul: Number(document.getElementById('inp-rul').value),
+        });
+        return;
+      }
       const eq = sandboxState.equipments[selectedStationId];
       eq.feed_rate = Number(document.getElementById('inp-feed').value);
       eq.load_ratio = Number(document.getElementById('inp-load').value) / 100.0;
@@ -1486,6 +1614,10 @@
     });
 
     document.getElementById('btn-exec-pm').addEventListener('click', () => {
+      if (apiConnected) {
+        applyServerMutation('control', { station_id: selectedStationId, action: 'PM' });
+        return;
+      }
       const eq = sandboxState.equipments[selectedStationId];
       eq.status = 'MAINTENANCE';
       eq.maint_type = 'PM';
@@ -1510,6 +1642,10 @@
     });
 
     document.getElementById('btn-exec-bm').addEventListener('click', () => {
+      if (apiConnected) {
+        applyServerMutation('control', { station_id: selectedStationId, action: 'BM' });
+        return;
+      }
       const eq = sandboxState.equipments[selectedStationId];
       eq.status = 'MAINTENANCE';
       eq.maint_type = 'BM';
@@ -1536,8 +1672,7 @@
     });
 
     document.getElementById('btn-reset-history').addEventListener('click', () => {
-      sandboxState = JSON.parse(JSON.stringify(MOCK_HISTORY[historyIdx]));
-      syncVisuals(false);
+      loadHistory(historyIdx);
     });
 
     // ==========================================
@@ -1598,19 +1733,28 @@
 
     document.getElementById('btn-run-sim').addEventListener('click', () => {
       const steps = Number(document.getElementById('sel-batch-ticks').value);
+      if (apiConnected) {
+        applyServerMutation('simulate', { ticks: steps }, result =>
+          showCompletedRun(result.run_id, result.snapshots));
+        return;
+      }
       const snapshots = [];
       for (let i = 0; i < steps; i++) {
         snapshots.push(stepPhysics(sandboxState));
       }
 
-      const runId = `run_${Date.now()}`;
+      showCompletedRun(`run_${Date.now()}`, snapshots);
+    });
+
+    function showCompletedRun(runId, snapshots) {
+      const steps = snapshots.length;
       const label = `실행 #${simulationRunArchive.length}: Tick #${snapshots[0].tick}~#${snapshots[snapshots.length - 1].tick} (${steps}틱)`;
       simulationRunArchive.unshift({ id: runId, name: label, snapshots });
       activeReportRunId = runId;
 
       syncVisuals(true);
       window.navTo('page-reports');
-    });
+    }
 
     document.getElementById('rep-run-selector').addEventListener('change', (e) => {
       activeReportRunId = e.target.value;
@@ -1635,7 +1779,7 @@
       document.getElementById('rep-page-subtitle').innerText =
         `${runEntry.name}  |  총 ${(count * 0.5).toFixed(1)}시간 공정 시뮬레이션 분석 결과`;
 
-      let sumYield = 0, sumPower = 0, sumCost = 0, wafers = 0;
+      let sumYield = 0, sumPower = 0, sumCost = 0, costTicks = 0, wafers = 0;
       const stats = {
         PHOTO_EUV: { work: 0, wait: 0, pm: 0, bm: 0, finalRul: 0, finalTemp: 0 },
         ETCH:      { work: 0, wait: 0, pm: 0, bm: 0, finalRul: 0, finalTemp: 0 },
@@ -1649,7 +1793,10 @@
         labels.push(`#${s.tick}`);
         sumYield += s.kpi.eds_yield;
         sumPower += s.kpi.power_kw;
-        sumCost += s.kpi.unit_cost;
+        if (s.kpi.unit_cost != null) {
+          sumCost += s.kpi.unit_cost;
+          costTicks++;
+        }
 
         yieldSeries.push(s.kpi.eds_yield);
         costSeries.push(s.kpi.unit_cost);
@@ -1661,7 +1808,9 @@
         rulTsv.push(s.equipments.HBM_TSV.rul);
 
         const tsv = s.equipments.HBM_TSV;
-        if (tsv.status === 'RUNNING') {
+        if (s.wafer_output != null) {
+          wafers += s.wafer_output;
+        } else if (tsv.status === 'RUNNING') {
           wafers += Math.round(125 * tsv.load_ratio * (s.kpi.eds_yield / 100));
         }
 
@@ -1682,10 +1831,10 @@
         });
       });
 
-      document.getElementById('rep-kpi-wafers').innerText = `${wafers.toLocaleString()} Wafers`;
+      document.getElementById('rep-kpi-wafers').innerText = `${wafers.toLocaleString()} Wafers${snaps.some(s => s.wafer_output == null) ? ' (추정)' : ''}`;
       document.getElementById('rep-kpi-yield').innerText = `${(sumYield / count).toFixed(2)}%`;
       document.getElementById('rep-kpi-energy').innerText = `${Math.round(sumPower * 0.5).toLocaleString()} kWh`;
-      document.getElementById('rep-kpi-cost').innerText = `$${Math.round(sumCost / count).toLocaleString()}`;
+      document.getElementById('rep-kpi-cost').innerText = costTicks ? `$${Math.round(sumCost / costTicks).toLocaleString()}` : '—';
 
       const tbody = document.getElementById('rep-table-body');
       tbody.innerHTML = '';
@@ -1870,16 +2019,17 @@
     let playTimer = null;
 
     function loadHistory(idx) {
+      scenarioId = null;
       historyIdx = idx;
       slider.value = idx;
-      document.getElementById('timeline-label').innerText = `${idx + 1} / ${MOCK_HISTORY.length}`;
-      sandboxState = JSON.parse(JSON.stringify(MOCK_HISTORY[idx]));
+      document.getElementById('timeline-label').innerText = `${idx + 1} / ${replayHistory.length}`;
+      sandboxState = JSON.parse(JSON.stringify(replayHistory[idx]));
       syncVisuals(false);
     }
 
     slider.addEventListener('input', e => loadHistory(Number(e.target.value)));
     document.getElementById('btn-prev').addEventListener('click', () => loadHistory(Math.max(0, historyIdx - 1)));
-    document.getElementById('btn-next').addEventListener('click', () => loadHistory(Math.min(MOCK_HISTORY.length - 1, historyIdx + 1)));
+    document.getElementById('btn-next').addEventListener('click', () => loadHistory(Math.min(replayHistory.length - 1, historyIdx + 1)));
     document.getElementById('btn-play').addEventListener('click', () => {
       const btn = document.getElementById('btn-play');
       if (playTimer) {
@@ -1888,7 +2038,7 @@
         btn.innerHTML = '<i class="bi bi-play-fill"></i>';
       } else {
         btn.innerHTML = '<i class="bi bi-pause-fill"></i>';
-        playTimer = setInterval(() => loadHistory((historyIdx + 1) % MOCK_HISTORY.length), 1800);
+        playTimer = setInterval(() => loadHistory((historyIdx + 1) % replayHistory.length), 1800);
       }
     });
 
@@ -1927,7 +2077,8 @@
       }
     }
 
-    loadHistory(2);
+    loadHistory(historyIdx);
+    void loadServerReplay();
     updateAlarmBadges();
     animate();
   </script>

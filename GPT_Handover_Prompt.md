@@ -6,7 +6,7 @@
 
 - `backend/main.py`와 `backend/models.py`에 첨부의 로컬 FastAPI 및 SQLAlchemy 코드를 배치했습니다. `uvicorn backend.main:app --reload`로 실행하며 기본 DB는 프로젝트 루트의 `m16_fab.db`입니다.
 - 로그인과 AI 위원회는 모의 구현입니다. 알람 목록은 대시보드 요약에 포함되며 별도 목록 API, 실인증, 실제 LLM 호출과 PostgreSQL 실행 검증은 후속 범위입니다.
-- `M16_Fab_Admin_Dashboard_v6.html`은 저장소 루트에 있습니다. 현재 화면은 브라우저 모의 상태를 사용하며 로컬 FastAPI와 연결하려면 아래 인터페이스와 실제 DOM·이벤트를 확인하세요. `web/index.html`은 v4 리플레이와 분석 리포트입니다.
+- `M16_Fab_Admin_Dashboard_v6.html`은 저장소 루트에 있습니다. `uvicorn backend.app:app --reload`로 열면 SQLite 리플레이, 설비 제어, OHT 배치 시뮬레이션 API에 연결됩니다. HTML 단독 실행 시 브라우저 모의 모드로 시작합니다. `web/index.html`은 v4 리플레이와 분석 리포트입니다.
 
 ---
 

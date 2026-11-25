@@ -40,7 +40,7 @@ def move_wip(fab, stock, front_capacity, etch_capacity, front_limit):
         if eq["status"] == "MAINTENANCE":
             return 0
         limit = 48 if stage == hbm else front_limit
-        return int(min(nominal * eq["feed_rate"], limit))
+        return int(min(nominal * eq["feed_rate"] * eq.get("target_load_ratio", 1.0), limit))
 
     # PHOTO_EUV draws directly from FOUP stock; its internal queue stays empty.
     exposed = min(capacity(photo, front_capacity), stock,
@@ -74,7 +74,9 @@ def simulate(state: FactoryState, config: FactoryConfig, rng=None, event="auto",
         prior_feeds = {stage: equipment[stage]["feed_rate"] for stage in STAGES}
         balance_wip_bottlenecks(buffers, equipment)
         for stage in STAGES:
-            equipment[stage]["feed_rate"] = min(equipment[stage]["feed_rate"], prior_feeds[stage])
+            eq = equipment[stage]
+            feed = eq.get("target_feed_rate", prior_feeds[stage])
+            eq["feed_rate"] = min(eq["feed_rate"], feed) if stage != "HBM_TSV" else feed
         congested = {stage for stage in STAGES if buffers[stage] >= 0.8 * BUFFER_CAPACITY}
     if config.schedule_pm or state.pellicle_health < 20:
         data.update(pellicle_health=100.0, chamber_temp=round(max(24.0, state.chamber_temp - 14), 1),
@@ -120,6 +122,10 @@ def simulate(state: FactoryState, config: FactoryConfig, rng=None, event="auto",
             wip = buffers["HBM_TSV"]
         stock -= exposed
         effective_throughput = etched / WAFERS_PER_PERCENT
+        if fab is not None and "target_temp" in equipment["ETCH"]:
+            target = equipment["ETCH"]["target_temp"]
+            needed = (nominal_temperature(state.chamber_temp, effective_throughput, 0) - target) / .23
+            chiller = min(100, max(chiller, needed))
         temp = round(nominal_temperature(state.chamber_temp, effective_throughput, chiller) + heat_spike, 1)
         target_class = max(1, int(8 + effective_throughput * .18 - chiller * .14 + class_spike))
         particles = max(1, min(100, round(state.cleanroom_class * .4 + target_class * .6)))
@@ -142,7 +148,10 @@ def simulate(state: FactoryState, config: FactoryConfig, rng=None, event="auto",
             STAGES, (exposed, etched, be_processed), (60, 60, 48),
             (24 + exposed * 0.22, data["chamber_temp"], 35 + be_processed * 0.45),
         ):
-            equipment[stage].update(chamber_temp=round(temperature, 2), load_ratio=round(amount / rated, 3))
+            eq = equipment[stage]
+            if stage != "ETCH" and eq["status"] == "RUNNING":
+                temperature = eq.get("target_temp", temperature)
+            eq.update(chamber_temp=round(temperature, 2), load_ratio=round(amount / rated, 3))
         alerts = update_rul_and_pdm(equipment, maintenance, data["cycle"])
         congested.update(stage for stage in STAGES if buffers[stage] >= 0.8 * BUFFER_CAPACITY)
         triggers.extend(alerts + [f"WIP_BOTTLENECK:{stage}" for stage in STAGES if stage in congested])
@@ -159,6 +168,10 @@ def simulate(state: FactoryState, config: FactoryConfig, rng=None, event="auto",
         for stage in STAGES:
             equipment[stage]["feed_rate"] = 1.0
         balance_wip_bottlenecks(buffers, equipment)
+        for stage in STAGES:
+            eq = equipment[stage]
+            if "target_feed_rate" in eq:
+                eq["feed_rate"] = min(eq["feed_rate"], eq["target_feed_rate"]) if stage != "HBM_TSV" else eq["target_feed_rate"]
     data["last_event"] = " / ".join(events) or "EUV·식각 및 HBM 가상 라인 정상 가동"
     updated = FactoryState.model_validate(data)
     updated.status = classify_state(updated)

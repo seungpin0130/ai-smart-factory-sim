@@ -10,6 +10,7 @@ OHT_NOMINAL_SPEED_MPS = 3.2   # 평균 주행 속도 (m/s)
 HOIST_HANDLING_SEC = 18.0     # FOUP 픽업/드롭 승강 시간 (초)
 TOTAL_OHT_VEHICLES = 48
 RESERVE_VEHICLES = 6
+CARRIER_POWER_KW = 1.85
 
 
 def simulate_oht_logistics(wip_buffers: dict, equipments: dict) -> dict:
@@ -46,6 +47,7 @@ def simulate_oht_logistics(wip_buffers: dict, equipments: dict) -> dict:
             "active_carriers": active_vehicles,
             "congestion_ratio": congestion,
             "transfer_time_sec": actual_transfer_sec,
+            "oht_power_kw": round(active_vehicles * CARRIER_POWER_KW, 1),
             "status": "CONGESTED" if congestion > 0.85 else "SMOOTH"
         }
 
@@ -53,7 +55,7 @@ def simulate_oht_logistics(wip_buffers: dict, equipments: dict) -> dict:
             alerts.append(f"OHT_CONGESTION:{route_key}({int(congestion * 100)}%)")
 
     utilization = round(min(1.0, total_active_carriers / TOTAL_OHT_VEHICLES), 3)
-    oht_power_kw = round(total_active_carriers * 1.85, 1)  # 대차당 평균 1.85kW
+    oht_power_kw = round(total_active_carriers * CARRIER_POWER_KW, 1)  # 대차당 평균 1.85kW
 
     return {
         "total_vehicles": TOTAL_OHT_VEHICLES,

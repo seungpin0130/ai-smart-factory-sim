@@ -97,7 +97,7 @@ python -m unittest discover -s tests -v
   Pages에는 웹 화면과 리플레이 JSON을 게시하고, SQLite는 저장소와 Actions
   아티팩트에 보관합니다.
 
-## v6 로컬 API와 SQLite
+## 기존 v6 데모 API와 SQLite
 
 프로젝트 루트에서 실행합니다.
 
@@ -130,14 +130,35 @@ uvicorn backend.main:app --reload
 | `/web/what-if.html` | v3.5 OHT 리플레이, 브라우저 What-If·BM 주입·이력 복귀 |
 | `/web/` | v4.0 3D 설비 선택·편집, 배치 실행·분석 리포트·HTML 내보내기 |
 | `/M16_Fab_Digital_Twin_v5.html` | v5 모의 로그인·3D 제어·트렌드 포털 |
-| `/M16_Fab_Admin_Dashboard_v6.html` | v6 Bootstrap 5 관리자 화면과 모의 알람·리포트 |
+| `/M16_Fab_Admin_Dashboard_v6.html` | v6 Bootstrap 5 관리자 화면과 알람·리포트 |
 
 v3.5와 v4.0은 `run_cycle.py --mode mock`으로 생성한 리플레이를 읽습니다.
 이력이 없으면 화면에 DEMO REPLAY가 표시됩니다. 대시보드에서 수행하는 What-If와
-배치 계산은 브라우저 메모리에만 남습니다. v5·v6도 브라우저 모의 데이터로 작동합니다.
+배치 계산은 브라우저 메모리에만 남습니다. 이 정적 서버에서는 v5·v6도 브라우저 모의 데이터로 작동합니다.
 
 OHT는 140m·185m 가상 경로에서 투입률과 목적지 WIP로 대차 수를 추정합니다.
 48대 중 예비 6대를 제외해 구간당 21대를 혼잡도 기준으로 사용하며, 85% 초과 시
 `OHT_CONGESTION`으로 위원회를 소집합니다. 구간별 반송 시간은 추정치입니다.
 반송 전력은 30분만큼 kWh로 환산해 팹 에너지에 합산하고, 구간별 지표는
 SQLite와 리플레이에 기록합니다.
+
+
+## v6 관제 화면과 Python 시뮬레이션
+
+```bash
+python -m pip install -r requirements-dev.txt
+uvicorn backend.app:app --reload
+python -m pytest -q
+```
+
+[관제 화면](http://localhost:8000/)에서 시연 로그인 후 **3D 관제**를 엽니다.
+[API 명세](http://localhost:8000/docs)에서 세 엔드포인트를 확인할 수 있습니다.
+기존 이력이 없다면 `python run_cycle.py --mode mock --event none`으로 원본
+리플레이 DB를 한 틱 생성할 수 있습니다. API는 DB 생성 전에는 `state.json`에서 시작합니다.
+
+- `GET /api/fab/state`는 원본 SQLite의 최신 상태와 최대 200개 틱을 반환합니다. OHT 지표가 없는 기존 틱은 저장된 설비·WIP로 지표를 계산합니다.
+- `POST /api/fab/control`은 설비별 설정이나 PM/BM을 적용합니다. 첫 요청의 `base_tick`은 출발 리플레이 틱입니다. 반환된 `scenario_id`를 다음 요청에 전달하면 같은 실험을 이어갑니다.
+- `POST /api/fab/simulate`는 6/12/24/48틱을 실행하고 OHT 지표, 스냅샷, 정비 이력과 함께 결과를 `m16_fab.db`에 저장합니다. 원본 리플레이 DB와 JSON은 API에서 읽기 전용입니다.
+- HTML 단독 실행 또는 초기 연결 실패 시 브라우저 모의 모드로 시작합니다. 서버 연결 후 요청이 실패하면 관제 화면에 오류를 표시합니다.
+
+이 서버는 로컬 시연용이며 로그인과 위원회는 모의 모드입니다. 실제 인증과 접근 제어는 포함되어 있지 않습니다.

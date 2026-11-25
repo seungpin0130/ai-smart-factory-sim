@@ -104,16 +104,28 @@ def save_tick(state, fab, record, maintenance, db_path=DB_PATH):
         """, maintenance)
 
 
-def export_replay_json(limit=200, output_path=REPLAY_PATH, db_path=DB_PATH, *, through_tick=None):
-    """Export the most recent ticks in playback order."""
-    init_db(db_path)
-    with closing(sqlite3.connect(db_path)) as db:
+def read_replay(db_path=DB_PATH, limit=200, *, through_tick=None):
+    """Read existing snapshots without initializing or updating the journal."""
+    if not Path(db_path).is_file():
+        return []
+    uri = Path(db_path).resolve().as_uri() + "?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True)) as db:
         db.row_factory = sqlite3.Row
-        rows = db.execute("""
-            SELECT t.*, a.trigger_reason, a.debate_transcript, a.final_action, o.metrics AS oht_metrics
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if "telemetry_snapshots" not in tables:
+            return []
+        oht_column = "o.metrics" if "oht_telemetry" in tables else "NULL"
+        oht_join = "LEFT JOIN oht_telemetry o USING (tick_id)" if "oht_telemetry" in tables else ""
+        rows = db.execute(f"""
+            SELECT t.*, a.trigger_reason, a.debate_transcript, a.final_action, {oht_column} AS oht_metrics
             FROM telemetry_snapshots t LEFT JOIN ai_decisions a USING (tick_id)
-            LEFT JOIN oht_telemetry o USING (tick_id)
+            {oht_join}
             WHERE (? IS NULL OR t.tick_id <= ?)
             ORDER BY t.tick_id DESC LIMIT ?
         """, (through_tick, through_tick, min(200, max(0, limit)))).fetchall()
-    write_json(Path(output_path), [dict(row) for row in reversed(rows)])
+    return [dict(row) for row in reversed(rows)]
+
+
+def export_replay_json(limit=200, output_path=REPLAY_PATH, db_path=DB_PATH, *, through_tick=None):
+    """Export the most recent ticks in playback order."""
+    write_json(Path(output_path), read_replay(db_path, limit, through_tick=through_tick))

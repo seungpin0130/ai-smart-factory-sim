@@ -27,7 +27,13 @@ jobs:
         run: |
           mkdir site
           cp index.html state.json config.json telemetry_history.json dashboard.json site/
-          mkdir -p site/logs
+          mkdir -p site/web site/logs
+          cp web/index.html site/web/
+          if [ -f web/replay_history.json ]; then
+            cp web/replay_history.json site/web/
+          else
+            echo '[]' > site/web/replay_history.json
+          fi
           cp logs/council_history.md site/logs/
       - uses: actions/upload-pages-artifact@v3
         with:

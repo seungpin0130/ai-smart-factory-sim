@@ -44,6 +44,23 @@ class Audit(StrictModel):
     approves_proposal: bool
 
 
+class EquipmentAction(StrictModel):
+    PHOTO_EUV_feed_rate: Literal[0.4, 1.0, 1.2]
+    ETCH_feed_rate: Literal[0.4, 1.0, 1.2]
+    PHOTO_EUV_action: Literal["KEEP_RUNNING", "SCHEDULE_PM_NOW"]
+    ETCH_action: Literal["KEEP_RUNNING", "SCHEDULE_PM_NOW"]
+    HBM_TSV_action: Literal["KEEP_RUNNING", "SCHEDULE_PM_NOW"]
+    target_temp: float = Field(ge=45, le=64)
+
+
+class FabDecision(Decision):
+    equipment_action: EquipmentAction
+
+
+class FabAudit(Audit):
+    equipment_action: EquipmentAction
+
+
 def classify(chamber_temp: float, eds_yield: float, foup_wafer_stock: int,
              cleanroom_class: int = 10, pellicle_health: float = 100,
              hbm_wip_buffer: int = 0) -> str:

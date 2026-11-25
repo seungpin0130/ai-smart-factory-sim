@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from ai_council import deliberate
+from factory_sim import initialize_equipment
 from models import FactoryConfig, FactoryState
 from storage import read_json
 
@@ -24,7 +25,11 @@ def main():
     failed = False
     for cycle in (first_cycle, first_cycle + 1):
         sample = state.model_copy(update={"cycle": cycle})
-        record = deliberate(sample, config, mode="live", recent=[sample.model_dump()], force=True)
+        fab = initialize_equipment(sample)
+        fab["equipments"]["ETCH"]["rul"] = 18.0
+        fab["wip_buffers"]["ETCH"] = 86
+        record = deliberate(sample, config, mode="live", recent=[sample.model_dump()],
+                            fab=fab, triggers=("RUL_CRITICAL:ETCH", "WIP_BOTTLENECK:ETCH"))
         chair = "Gemini" if cycle % 2 else "ChatGPT"
         if record["mode"] == "live" and len(record["transcript"]) == 3 and record["chair"] == chair:
             print(f"Cycle {cycle}, {chair} chair: passed (3 validated responses)", flush=True)

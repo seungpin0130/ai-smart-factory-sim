@@ -4,7 +4,9 @@ import os
 import random
 from pathlib import Path
 from ai_council import deliberate
-from factory_sim import simulate
+from db_manager import DB_PATH, REPLAY_PATH, export_replay_json, load_tick, save_tick
+from factory_sim import initialize_equipment, simulate
+from pdm_wip_engine import execute_preventive_maintenance
 from models import FactoryConfig, FactoryState
 from storage import read_json, write_json
 
@@ -25,17 +27,28 @@ def run(data_dir: Path, mode="mock", seed=None, provider=None, event="auto", for
             if not expected_config_sha or actual != expected_config_sha:
                 raise ValueError("Stale configuration: reload current config before retrying")
             config = FactoryConfig.model_validate(json.loads(control_json))
-        history_file = data_dir / "logs/history.json"
-        history = read_json(history_file) if history_file.exists() else []
-        new_state, config = simulate(state, config, random.Random(seed), event)
+        db_path = data_dir / DB_PATH
+        fab = load_tick(state.cycle, db_path) or initialize_equipment(state)
+        maintenance = []
+        triggers = []
+        new_state, config = simulate(state, config, random.Random(seed), event,
+                                     fab=fab, maintenance=maintenance, triggers=triggers)
         telemetry_path = data_dir / "telemetry_history.json"
         telemetry = read_json(telemetry_path) if telemetry_path.exists() else []
-        telemetry = (telemetry + [new_state.model_dump()])[-100:]
-        record = deliberate(new_state, config, mode, provider, telemetry[-5:], force=force)
-        write_json(data_dir / "state.json", new_state.model_dump())
+        telemetry = ([row for row in telemetry if row["cycle"] < new_state.cycle] + [new_state.model_dump()])[-100:]
+        record = deliberate(new_state, config, mode, provider, telemetry[-5:],
+                            force=force, fab=fab, triggers=triggers)
+        action = record["final_action"]
+        for stage, equipment in fab["equipments"].items():
+            if action[f"{stage}_action"] == "SCHEDULE_PM_NOW":
+                execute_preventive_maintenance(fab["equipments"], stage, maintenance, new_state.cycle)
+            equipment["feed_rate"] = action.get(f"{stage}_feed_rate", equipment["feed_rate"])
+        save_tick(new_state, fab, record, maintenance, db_path)
+        export_replay_json(output_path=data_dir / REPLAY_PATH, db_path=db_path, through_tick=new_state.cycle)
         write_json(telemetry_path, telemetry)
         from records import save_record
         save_record(data_dir, record)
+        write_json(data_dir / "state.json", new_state.model_dump())
         print(f"Cycle {new_state.cycle}: {new_state.status}, council={record['mode']}")
         return record
     finally:

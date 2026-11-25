@@ -83,7 +83,7 @@ class V2Tests(unittest.TestCase):
     def test_queued_fresh_config_and_history_window(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
-            (root/'state.json').write_text(state().model_dump_json())
+            (root/'state.json').write_text(state(cycle=99).model_dump_json())
             raw=config().model_dump_json().encode()
             (root/'config.json').write_bytes(raw)
             (root/'telemetry_history.json').write_text(json.dumps([state(cycle=i).model_dump() for i in range(100)]))

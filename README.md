@@ -73,3 +73,26 @@ python -m unittest discover -s tests -v
 성공합니다. 키가 없거나 호출 또는 응답 검증이 실패하면 종료 코드 1을 반환합니다.
 로그에는 의장, 검증 결과, 실패 시 완료된 턴 수와 예외 유형만 남깁니다.
 팹 상태 파일, GitHub 커밋, 장애 Issue에는 쓰지 않습니다.
+
+## v3 설비·WIP 리플레이
+
+`python run_cycle.py --mode mock --force-ai-debate`로 한 틱 실행한 뒤
+`python -m http.server 8000`에서 `/web/`을 엽니다. 루트 화면은 기존 설정 요청에
+사용합니다. `factory_sim.py`와 `ai_council.py`를 단독 실행하는 경로는 v2 호환용입니다.
+
+- `run_cycle.py`는 직전 틱의 설비 상태와 공정 버퍼를 SQLite에서 이어받습니다.
+  최초 v3 틱에는 v2의 기존 HBM WIP를 가져오고 설비 RUL은 100%에서 시작합니다.
+  PHOTO_EUV는 FOUP 재고에서 직접 공급받으며 식각·HBM 앞의 버퍼에 중간 재공을 보관합니다.
+- 공정별 정비(PM 2틱, BM 6틱)는 해당 설비의 이송을 멈춥니다.
+  기존 펠리클 PM과 램프업은 별도로 적용됩니다. 버퍼가 80매 이상이면 상류를 감속하고
+  RUL이 20% 미만이면 위원회를 소집합니다. 감사안과 버퍼 제한을 넘지 않도록 합의안을
+  보정하며 RUL 5% 이하에는 PM을 강제합니다.
+- `data/m16_fab_history.db`의 `telemetry_snapshots`, `ai_decisions`,
+  `maintenance_logs`에 틱 번호로 연결된 이력을 저장합니다. 리플레이의
+  `wip_buffers`, `equipment_states`, `debate_transcript`, `final_action`은
+  JSON 문자열입니다. `web/replay_history.json`은 최신 200틱을 오래된 순서로 제공합니다.
+  전력은 에너지를 30분으로 나눈 가상 평균 kW입니다. 단위 원가는 가상 전기·운영비와
+  해당 틱의 정비비를 양품 수로 나눕니다. 양품이 없는 틱의 단위 원가는 `null`입니다.
+- 예약 실행은 30분 주기이며 상태·DB·리플레이를 한 커밋으로 푸시합니다.
+  Pages에는 웹 화면과 리플레이 JSON을 게시하고, SQLite는 저장소와 Actions
+  아티팩트에 보관합니다.

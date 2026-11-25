@@ -11,12 +11,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import Field, model_validator
 
-from ai_council import deliberate
+from backend.semicon import PROCESS_ROUTE, STATION_TO_TOOL, dashboard_snapshot, next_timestamp, set_rul, start_engine
 from db_manager import DB_PATH, read_replay
-from factory_sim import TICK_HOURS, initialize_equipment, simulate
-from models import FactoryConfig, FactoryState, StrictModel
+from m16_semicon_fab_sim import M16SemiconFabSimulator, SemiE10State
+from models import FactoryState, StrictModel
 from oht_logistics import CARRIER_POWER_KW, simulate_oht_logistics
-from pdm_wip_engine import execute_preventive_maintenance
 from storage import read_json
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,22 +45,6 @@ class ControlRequest(ScenarioRequest):
 
 class SimulateRequest(ScenarioRequest):
     ticks: Literal[6, 12, 24, 48]
-
-
-def serialize_state(state, fab, *, reason=None, debate=None, action=None, unit_cost=None, oht=None):
-    return {
-        "tick": state.cycle,
-        "timestamp": state.timestamp,
-        "wafer_output": state.wafer_output,
-        "kpi": {"eds_yield": state.eds_yield, "power_kw": round(state.power_kwh / TICK_HOURS, 2),
-                "unit_cost": unit_cost},
-        "wip_buffers": fab["wip_buffers"],
-        "equipments": fab["equipments"],
-        "trigger_reason": reason,
-        "debate": debate,
-        "final_action": action,
-        "oht_metrics": oht if oht is not None else simulate_oht_logistics(fab["wip_buffers"], fab["equipments"]),
-    }
 
 
 def replay_snapshot(row):
@@ -102,46 +85,41 @@ def open_scenarios(path):
     return db
 
 
-def save_scenario(db, scenario_id, state, fab, config):
-    payload = json.dumps({"state": state.model_dump(), "fab": fab, "config": config.model_dump()}, allow_nan=False)
+def save_scenario(db, scenario_id, sim, view):
+    payload = json.dumps({"engine": sim.checkpoint(), "view": view}, allow_nan=False)
     db.execute("""
         INSERT INTO fab_scenarios (id, payload) VALUES (?, ?)
         ON CONFLICT(id) DO UPDATE SET payload=excluded.payload
     """, (scenario_id, payload))
 
 
+def find_scenario(db, scenario_id):
+    row = db.execute("SELECT payload FROM fab_scenarios WHERE id = ?", (str(scenario_id),)).fetchone()
+    if row is None:
+        raise HTTPException(404, "Scenario not found")
+    return json.loads(row[0])
+
+
 def load_scenario(db, request, data_dir):
     if request.scenario_id is not None:
+        data = find_scenario(db, request.scenario_id)
         scenario_id = str(request.scenario_id)
-        row = db.execute("SELECT payload FROM fab_scenarios WHERE id = ?", (scenario_id,)).fetchone()
-        if row is None:
-            raise HTTPException(404, "Scenario not found")
-        data = json.loads(row[0])
-        return scenario_id, FactoryState.model_validate(data["state"]), data["fab"], FactoryConfig.model_validate(data["config"])
+        if "engine" in data:
+            return scenario_id, M16SemiconFabSimulator.restore(data["engine"]), data["view"]["timestamp"]
+        # Upgrade legacy scenario settings without editing saved legacy reports.
+        state = FactoryState.model_validate(data["state"])
+        return scenario_id, start_engine(state.cycle, data["fab"]["equipments"], True), state.timestamp
 
     state = FactoryState.model_validate(read_json(data_dir / "state.json"))
-    config = FactoryConfig.model_validate(read_json(data_dir / "config.json"))
     rows = read_replay(data_dir / DB_PATH, limit=1, through_tick=request.base_tick)
     if request.base_tick is not None and not any(row["tick_id"] == request.base_tick for row in rows):
         if request.base_tick != state.cycle:
             raise HTTPException(404, "Replay tick not found")
         rows = []
     if not rows:
-        return str(uuid4()), state, initialize_equipment(state), config
-
-    snapshot = replay_snapshot(rows[-1])
-    log = data_dir / f"logs/cycles/{snapshot['tick']:08d}.json"
-    if log.is_file():
-        record = read_json(log)
-        state = FactoryState.model_validate(record["state"])
-        config = FactoryConfig.model_validate(record["applied_config"])
-    fab = {"wip_buffers": snapshot["wip_buffers"], "equipments": snapshot["equipments"]}
-    state = state.model_copy(update={
-        "cycle": snapshot["tick"], "timestamp": snapshot["timestamp"],
-        "eds_yield": snapshot["kpi"]["eds_yield"], "power_kwh": snapshot["kpi"]["power_kw"] * TICK_HOURS,
-        "chamber_temp": fab["equipments"]["ETCH"]["chamber_temp"], "hbm_wip_buffer": fab["wip_buffers"]["HBM_TSV"],
-    })
-    return str(uuid4()), state, fab, config
+        return str(uuid4()), start_engine(state.cycle, {}), state.timestamp
+    base = replay_snapshot(rows[-1])
+    return str(uuid4()), start_engine(base["tick"], base["equipments"], True), base["timestamp"]
 
 
 def create_app(data_dir: Path = ROOT, scenario_db: Path | None = None):
@@ -156,72 +134,81 @@ def create_app(data_dir: Path = ROOT, scenario_db: Path | None = None):
         return FileResponse(ROOT / DASHBOARD, media_type="text/html")
 
     @api.get("/api/fab/state")
-    def get_state():
+    def get_state(scenario_id: UUID | None = None):
+        if scenario_id is not None:
+            if not scenario_db.is_file():
+                raise HTTPException(404, "Scenario not found")
+            with closing(open_scenarios(scenario_db)) as db:
+                data = find_scenario(db, scenario_id)
+                if "view" not in data:
+                    state = FactoryState.model_validate(data["state"])
+                    sim = start_engine(state.cycle, data["fab"]["equipments"], True)
+                    view = dashboard_snapshot(sim, sim.snapshot(), state.timestamp)
+                else:
+                    view = data["view"]
+                rows = db.execute(
+                    "SELECT snapshots FROM fab_scenario_runs WHERE scenario_id = ? ORDER BY rowid DESC LIMIT 1",
+                    (str(scenario_id),),
+                ).fetchone()
+            return {"state": view, "history": json.loads(rows[0]) if rows else [view], "process_route": PROCESS_ROUTE}
         history = [replay_snapshot(row) for row in read_replay(data_dir / DB_PATH)]
         if not history:
             state = FactoryState.model_validate(read_json(data_dir / "state.json"))
-            history = [serialize_state(state, initialize_equipment(state))]
-        return {"state": history[-1], "history": history}
+            sim = start_engine(state.cycle, {})
+            history = [dashboard_snapshot(sim, sim.snapshot(), state.timestamp)]
+        return {"state": history[-1], "history": history, "process_route": PROCESS_ROUTE}
 
     @api.post("/api/fab/control")
     def control(request: ControlRequest):
         with closing(open_scenarios(scenario_db)) as db, db:
             db.execute("BEGIN IMMEDIATE")
-            scenario_id, state, fab, config = load_scenario(db, request, data_dir)
-            station = request.station_id
-            eq = fab["equipments"][station]
-            if eq["status"] == "MAINTENANCE":
+            scenario_id, sim, timestamp = load_scenario(db, request, data_dir)
+            tool = sim.tools[STATION_TO_TOOL[request.station_id]]
+            if tool.state in (SemiE10State.SDT, SemiE10State.UDT):
                 raise HTTPException(409, "Station is undergoing maintenance")
-            if request.action == "PM":
-                events = []
-                execute_preventive_maintenance(fab["equipments"], station, events, state.cycle)
-                eq["load_ratio"] = 0.0
-                fab.setdefault("pending_maintenance", []).extend(events)
-            elif request.action == "BM":
-                fab.setdefault("pending_maintenance", []).append((state.cycle, station, "BM", eq["rul"], 6, 4500.0))
-                eq.update(status="MAINTENANCE", maint_type="BM", maint_remain=6, rul=0.0, load_ratio=0.0)
+            if request.action:
+                is_pm = request.action == "PM"
+                sim.start_maintenance(tool, request.action, 30 if is_pm else 90,
+                                      "MANUAL_PM" if is_pm else "INJECTED_BM")
+                if not is_pm:
+                    tool.rf_on_hours = tool.max_rf_hours
             else:
-                for field, target in (("feed_rate", "target_feed_rate"), ("load_ratio", "target_load_ratio"),
-                                      ("chamber_temp", "target_temp"), ("rul", None)):
-                    value = getattr(request, field)
-                    if value is not None:
-                        eq[field] = value
-                        if target:
-                            eq[target] = value
-                if station == "ETCH" and request.chamber_temp is not None:
-                    state = state.model_copy(update={"chamber_temp": request.chamber_temp})
-            save_scenario(db, scenario_id, state, fab, config)
+                if request.feed_rate is not None:
+                    tool.feed_rate = request.feed_rate
+                if request.load_ratio is not None:
+                    tool.load_ratio = request.load_ratio
+                if request.chamber_temp is not None:
+                    tool.temperature_setpoint_c = tool.chamber_temp_c = request.chamber_temp
+                if request.rul is not None:
+                    set_rul(tool, request.rul)
             details = request.model_dump(exclude_none=True, exclude={"base_tick", "scenario_id"})
-            return {"scenario_id": scenario_id, "state": serialize_state(
-                state, fab, reason=f"{request.action or 'TUNED'}:{station}", action=details)}
+            view = dashboard_snapshot(sim, sim.snapshot(), timestamp,
+                                      trigger=f"{request.action or 'TUNED'}:{request.station_id}", action=details)
+            save_scenario(db, scenario_id, sim, view)
+            return {"scenario_id": scenario_id, "state": view}
 
     @api.post("/api/fab/simulate")
     def batch(request: SimulateRequest):
         with closing(open_scenarios(scenario_db)) as db, db:
             db.execute("BEGIN IMMEDIATE")
-            scenario_id, state, fab, config = load_scenario(db, request, data_dir)
+            scenario_id, sim, timestamp = load_scenario(db, request, data_dir)
             snapshots, maintenance = [], []
             for _ in range(request.ticks):
-                events = fab.pop("pending_maintenance", [])
-                triggers = []
-                state, consumed = simulate(state, config, event="none", fab=fab, maintenance=events, triggers=triggers)
-                record = deliberate(state, consumed, mode="mock", fab=fab, triggers=triggers)
-                action = record["final_action"]
-                for station, eq in fab["equipments"].items():
-                    if action[f"{station}_action"] == "SCHEDULE_PM_NOW":
-                        execute_preventive_maintenance(fab["equipments"], station, events, state.cycle)
-                    eq["feed_rate"] = action.get(f"{station}_feed_rate", eq["feed_rate"])
-                config = FactoryConfig.model_validate(record["applied_config"])
-                unit_cost = (round((state.power_kwh * .12 + 45 + sum(e[-1] for e in events)) / state.wafer_output, 2)
-                             if state.wafer_output else None)
-                snapshot = serialize_state(state, fab, reason=record["trigger_reason"], debate=record["debate_transcript"],
-                                           action=action, unit_cost=unit_cost, oht=fab["oht_metrics"])
-                # The scenario is mutated on the following tick. Freeze this tick now.
-                snapshots.append(json.loads(json.dumps(snapshot, allow_nan=False)))
+                previously_violated = sim.q_time_violations
+                observation = sim.step()
+                timestamp = next_timestamp(timestamp, sim.tick_minutes)
+                events, sim.maintenance_events = sim.maintenance_events, []
+                triggers = [f"{event[2]}:{event[1]}" for event in events]
+                if sim.q_time_violations > previously_violated:
+                    triggers.append("Q_TIME_VIOLATION")
+                if observation["amhs_oht"]["congestion_pct"] > 85:
+                    triggers.append("OHT_CONGESTION")
+                snapshots.append(dashboard_snapshot(sim, observation, timestamp,
+                                                     trigger=" & ".join(triggers) or None, maintenance=events))
                 maintenance.extend(events)
 
             run_id = str(uuid4())
-            save_scenario(db, scenario_id, state, fab, config)
+            save_scenario(db, scenario_id, sim, snapshots[-1])
             db.execute("INSERT INTO fab_scenario_runs VALUES (?, ?, ?, ?)",
                        (run_id, scenario_id, json.dumps(snapshots), json.dumps(maintenance)))
             return {"scenario_id": scenario_id, "run_id": run_id, "state": snapshots[-1], "snapshots": snapshots}

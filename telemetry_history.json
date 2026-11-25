@@ -1,1 +1,19 @@
-[]
+[
+  {
+    "cycle": 1,
+    "timestamp": "2026-11-25T06:09:27+00:00",
+    "chamber_temp": 43.4,
+    "wafer_output": 47,
+    "total_wafer_output": 47,
+    "eds_yield": 98.2,
+    "foup_wafer_stock": 275,
+    "hbm_wip_buffer": 37,
+    "cleanroom_class": 12,
+    "pellicle_health": 96.9,
+    "power_kwh": 805.0,
+    "unit_cost_index": 136.9,
+    "ramp_up_remaining": 0,
+    "status": "NORMAL",
+    "last_event": "EUV·식각 및 HBM 가상 라인 정상 가동"
+  }
+]

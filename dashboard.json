@@ -1,20 +1,20 @@
 {
   "state": {
-    "cycle": 0,
-    "timestamp": "2026-11-25T00:00:00Z",
-    "chamber_temp": 42.0,
-    "wafer_output": 0,
-    "total_wafer_output": 0,
-    "eds_yield": 96.5,
-    "foup_wafer_stock": 320,
-    "cleanroom_class": 10,
-    "pellicle_health": 100.0,
+    "cycle": 1,
+    "timestamp": "2026-11-25T06:09:27+00:00",
+    "chamber_temp": 43.4,
+    "wafer_output": 47,
+    "total_wafer_output": 47,
+    "eds_yield": 98.2,
+    "foup_wafer_stock": 275,
+    "hbm_wip_buffer": 37,
+    "cleanroom_class": 12,
+    "pellicle_health": 96.9,
+    "power_kwh": 805.0,
+    "unit_cost_index": 136.9,
+    "ramp_up_remaining": 0,
     "status": "NORMAL",
-    "last_event": "M16 가상 팹 클린룸 및 EUV/HBM 라인 초기화 완료",
-    "hbm_wip_buffer": 40,
-    "power_kwh": 420.0,
-    "unit_cost_index": 100.0,
-    "ramp_up_remaining": 0
+    "last_event": "EUV·식각 및 HBM 가상 라인 정상 가동"
   },
   "config": {
     "euv_throughput": 75,
@@ -22,5 +22,94 @@
     "auto_foup_order": false,
     "schedule_pm": false
   },
-  "history": []
+  "history": [
+    {
+      "cycle": 1,
+      "timestamp": "2026-11-25T06:09:27+00:00",
+      "mode": "mock",
+      "committee_convened": true,
+      "chair": "Gemini",
+      "requested_mode": "mock",
+      "error_type": null,
+      "state": {
+        "cycle": 1,
+        "timestamp": "2026-11-25T06:09:27+00:00",
+        "chamber_temp": 43.4,
+        "wafer_output": 47,
+        "total_wafer_output": 47,
+        "eds_yield": 98.2,
+        "foup_wafer_stock": 275,
+        "hbm_wip_buffer": 37,
+        "cleanroom_class": 12,
+        "pellicle_health": 96.9,
+        "power_kwh": 805.0,
+        "unit_cost_index": 136.9,
+        "ramp_up_remaining": 0,
+        "status": "NORMAL",
+        "last_event": "EUV·식각 및 HBM 가상 라인 정상 가동"
+      },
+      "previous_config": {
+        "euv_throughput": 75,
+        "chiller_power": 60,
+        "auto_foup_order": false,
+        "schedule_pm": false
+      },
+      "proposed_config": {
+        "euv_throughput": 75,
+        "chiller_power": 60,
+        "auto_foup_order": false,
+        "schedule_pm": false
+      },
+      "applied_config": {
+        "euv_throughput": 75,
+        "chiller_power": 60,
+        "auto_foup_order": false,
+        "schedule_pm": false
+      },
+      "action_reason": "[MOCK] 규칙 기반 제어 확정 (실제 AI 호출 없음)",
+      "overrides": [],
+      "create_issue_alert": false,
+      "transcript": [
+        {
+          "role": "ChatGPT (모의)",
+          "payload": {
+            "new_config": {
+              "euv_throughput": 75,
+              "chiller_power": 60,
+              "auto_foup_order": false,
+              "schedule_pm": false
+            },
+            "action_reason": "[MOCK] 웨이퍼 후공정 최대48매/사이클·수율 94% 목표의 규칙 기반 제안",
+            "create_issue_alert": false
+          }
+        },
+        {
+          "role": "Gemini (모의)",
+          "payload": {
+            "recommended_config": {
+              "euv_throughput": 75,
+              "chiller_power": 60,
+              "auto_foup_order": false,
+              "schedule_pm": false
+            },
+            "risk_analysis": "[MOCK] 챔버 온도·EDS 수율·청정도·수명·예상 잔고에 SOP 적용",
+            "approves_proposal": true
+          }
+        },
+        {
+          "role": "Gemini 의장 (모의)",
+          "payload": {
+            "new_config": {
+              "euv_throughput": 75,
+              "chiller_power": 60,
+              "auto_foup_order": false,
+              "schedule_pm": false
+            },
+            "action_reason": "[MOCK] 규칙 기반 제어 확정 (실제 AI 호출 없음)",
+            "create_issue_alert": false
+          }
+        }
+      ]
+    }
+  ]
 }

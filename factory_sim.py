@@ -4,10 +4,12 @@ import random
 from datetime import datetime, timezone
 from pathlib import Path
 from models import FactoryConfig, FactoryState, classify_state
+from oht_logistics import simulate_oht_logistics
 from pdm_wip_engine import BUFFER_CAPACITY, STAGES, balance_wip_bottlenecks, update_rul_and_pdm
 from storage import read_json, write_json
 
 EVENTS = ("auto", "none", "euv_instability", "chiller_flow_loss", "mr_muf_fumes")
+TICK_HOURS = 0.5
 ORDER_BATCH = 200  # Virtual delivery batch, not one physical FOUP's capacity.
 WAFERS_PER_PERCENT = .6
 
@@ -144,7 +146,15 @@ def simulate(state: FactoryState, config: FactoryConfig, rng=None, event="auto",
         alerts = update_rul_and_pdm(equipment, maintenance, data["cycle"])
         congested.update(stage for stage in STAGES if buffers[stage] >= 0.8 * BUFFER_CAPACITY)
         triggers.extend(alerts + [f"WIP_BOTTLENECK:{stage}" for stage in STAGES if stage in congested])
+        oht = simulate_oht_logistics(buffers, equipment)
+        fab["oht_metrics"] = oht
+        triggers.extend(oht["alerts"])
         events.extend(triggers)
+        data["power_kwh"] = round(data["power_kwh"] + oht["oht_power_kw"] * TICK_HOURS, 2)
+        if data["wafer_output"]:
+            data["unit_cost_index"] = round(
+                ((data["power_kwh"] * .12 + 45) / data["wafer_output"] / 2.2) * 100, 1
+            )
         # Reset the next tick's baseline before the council adds stricter caps.
         for stage in STAGES:
             equipment[stage]["feed_rate"] = 1.0

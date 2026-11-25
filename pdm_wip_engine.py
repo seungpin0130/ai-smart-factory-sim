@@ -10,6 +10,7 @@ def update_rul_and_pdm(equipments: dict, maint_logs: list, tick_id: int) -> list
             eq["maint_remain"] -= 1
             if eq["maint_remain"] <= 0:
                 eq["status"] = "RUNNING"
+                eq["maint_type"] = None
                 eq["rul"] = 100.0
             continue
 
@@ -23,6 +24,7 @@ def update_rul_and_pdm(equipments: dict, maint_logs: list, tick_id: int) -> list
             # 돌발 고장(BM) 발생 -> 긴 다운타임 & 막대한 원가 페널티
             eq["status"] = "MAINTENANCE"
             eq["maint_remain"] = 6
+            eq["maint_type"] = "BM"
             maint_logs.append((tick_id, eq_id, "BM", previous_rul, 6, 4500.0))
             alerts.append(f"BM_FAILURE:{eq_id}")
         elif eq["rul"] < 20.0:
@@ -41,6 +43,7 @@ def execute_preventive_maintenance(equipments: dict, eq_id: str, maint_logs: lis
         rul_before = eq["rul"]
         eq["status"] = "MAINTENANCE"
         eq["maint_remain"] = 2
+        eq["maint_type"] = "PM"
         maint_logs.append((tick_id, eq_id, "PM", rul_before, 2, 1200.0))
 
 

@@ -24,6 +24,10 @@ def init_db(db_path=DB_PATH):
                 wip_buffers TEXT NOT NULL,
                 equipment_states TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS oht_telemetry (
+                tick_id INTEGER PRIMARY KEY REFERENCES telemetry_snapshots(tick_id),
+                metrics TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS ai_decisions (
                 decision_id INTEGER PRIMARY KEY,
                 tick_id INTEGER NOT NULL UNIQUE REFERENCES telemetry_snapshots(tick_id),
@@ -86,6 +90,13 @@ def save_tick(state, fab, record, maintenance, db_path=DB_PATH):
                 debate_transcript=excluded.debate_transcript, final_action=excluded.final_action
         """, (tick, record["trigger_reason"], encode(record["debate_transcript"]),
               json.dumps(record["final_action"], ensure_ascii=False, indent=2, allow_nan=False)))
+        if "oht_metrics" in fab:
+            db.execute("""
+                INSERT INTO oht_telemetry (tick_id, metrics) VALUES (?, ?)
+                ON CONFLICT(tick_id) DO UPDATE SET metrics=excluded.metrics
+            """, (tick, encode(fab["oht_metrics"])))
+        else:
+            db.execute("DELETE FROM oht_telemetry WHERE tick_id = ?", (tick,))
         db.execute("DELETE FROM maintenance_logs WHERE tick_id = ?", (tick,))
         db.executemany("""
             INSERT INTO maintenance_logs (tick_id, equip_id, maint_type, rul_before, downtime_ticks, cost_impact)
@@ -99,8 +110,9 @@ def export_replay_json(limit=200, output_path=REPLAY_PATH, db_path=DB_PATH, *, t
     with closing(sqlite3.connect(db_path)) as db:
         db.row_factory = sqlite3.Row
         rows = db.execute("""
-            SELECT t.*, a.trigger_reason, a.debate_transcript, a.final_action
+            SELECT t.*, a.trigger_reason, a.debate_transcript, a.final_action, o.metrics AS oht_metrics
             FROM telemetry_snapshots t LEFT JOIN ai_decisions a USING (tick_id)
+            LEFT JOIN oht_telemetry o USING (tick_id)
             WHERE (? IS NULL OR t.tick_id <= ?)
             ORDER BY t.tick_id DESC LIMIT ?
         """, (through_tick, through_tick, min(200, max(0, limit)))).fetchall()

@@ -27,6 +27,7 @@ FAB_SOP = """
 v3: PHOTO_EUV → ETCH → HBM_TSV. 버퍼 기준 용량은 100매다. 후속 버퍼가 80매 이상이면
 상류 feed_rate를 0.4, 30매 이하면 최대 1.2로 제안한다. 1.0은 정상 가동이다.
 RUL_CRITICAL(20% 미만) 설비에 SCHEDULE_PM_NOW 또는 KEEP_RUNNING을 선택하고 근거를 설명한다.
+OHT_CONGESTION 발생 시 구간 대기 대차·지연·전력과 목적지 WIP를 비교해 감속을 검토한다.
 PM은 2틱/$1,200, BM은 6틱/$4,500이다. 가동 부하·전력·원가와 WIP를 함께 고려한다.
 target_temp는 다음 틱 식각 챔버의 목표 온도(45–64°C)다. 이미 정비 중인 설비는
 KEEP_RUNNING으로 응답한다. equipment_action의 모든 필드를 작성한다.

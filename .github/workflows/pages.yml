@@ -28,7 +28,8 @@ jobs:
           mkdir site
           cp index.html state.json config.json telemetry_history.json dashboard.json site/
           mkdir -p site/web site/logs
-          cp web/index.html site/web/
+          cp web/index.html web/what-if.html site/web/
+          cp M16_Fab_Digital_Twin_v5.html M16_Fab_Admin_Dashboard_v6.html site/
           if [ -f web/replay_history.json ]; then
             cp web/replay_history.json site/web/
           else

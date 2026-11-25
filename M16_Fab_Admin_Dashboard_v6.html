@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="ko" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SK hynix M16 Fab - Enterprise MES & Digital Twin Admin Portal v6.0</title>
+  <!-- Bootstrap 5.3 CSS & Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --sidebar-width: 260px;
+      --sidebar-collapsed-width: 74px;
+      --topbar-height: 62px;
+      --app-bg: #0b1120;
+      --surface-bg: #111827;
+      --card-bg: #161f33;
+      --border-color: rgba(148, 163, 184, 0.16);
+      --accent-primary: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --text-main: #f1f5f9;
+      --text-sub: #94a3b8;
+    }
+
+    [data-bs-theme="light"] {
+      --app-bg: #f1f5f9;
+      --surface-bg: #ffffff;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-sub: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--app-bg);
+      color: var(--text-main);
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    /* =========================================
+       1. LOGIN PAGE (BOOTSTRAP ADMIN AUTH)
+       ========================================= */
+    #view-login {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      background: linear-gradient(135deg, #090d16 0%, #111c33 50%, #090d16 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #view-login.d-none { display: none !important; }
+
+    .auth-wrapper {
+      width: 100%;
+      max-width: 960px;
+      background: #111827;
+      border: 1px solid rgba(96, 165, 250, 0.28);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 65px rgba(0, 0, 0, 0.65);
+    }
+
+    .auth-brand-side {
+      background: linear-gradient(160deg, #1d4ed8 0%, #0f172a 100%);
+      padding: 44px 38px;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .auth-form-side {
+      padding: 44px 40px;
+      background: #111827;
+      color: #f8fafc;
+    }
+
+    /* =========================================
+       2. ADMIN LAYOUT (SIDEBAR + NAVBAR + CONTENT)
+       ========================================= */
+    #admin-shell {
+      display: none;
+      min-height: 100vh;
+    }
+    #admin-shell.active {
+      display: flex;
+    }
+
+    /* Left Admin Sidebar */
+    #admin-sidebar {
+      width: var(--sidebar-width);
+      background-color: var(--surface-bg);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 1040;
+      transition: width 0.22s ease, transform 0.22s ease;
+    }
+
+    body.sidebar-collapsed #admin-sidebar {
+      width: var(--sidebar-collapsed-width);
+    }
+
+    .sidebar-brand {
+      height: var(--topbar-height);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-color);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .brand-icon-box {
+      width: 34px;
+      height: 34px;
+      min-width: 34px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #ef4444, #f97316);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .sidebar-user-box {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .user-avatar {
+      width: 38px;
+      height: 38px;
+      min-width: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      color: #fff;
+      font-size: 14px;
+    }
+
+    .sidebar-menu {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 12px;
+    }
+
+    .menu-section-title {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--text-sub);
+      padding: 10px 12px 6px;
+      white-space: nowrap;
+    }
+
+    body.sidebar-collapsed .menu-section-title,
+    body.sidebar-collapsed .hide-on-collapse {
+      display: none !important;
+    }
+
+    .nav-item-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 13px;
+      border-radius: 10px;
+      color: var(--text-sub);
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .nav-item-link i {
+      font-size: 17px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .nav-item-link:hover {
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--text-main);
+    }
+
+    .nav-item-link.active {
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.22), rgba(6, 182, 212, 0.12));
+      color: #38bdf8;
+      border-left: 3px solid #38bdf8;
+    }
+
+    /* Main Content Wrapper */
+    #main-wrapper {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      transition: margin-left 0.22s ease;
+    }
+
+    body.sidebar-collapsed #main-wrapper {
+      margin-left: var(--sidebar-collapsed-width);
+    }
+
+    /* Top Admin Navbar */
+    #admin-topbar {
+      height: var(--topbar-height);
+      background-color: var(--surface-bg);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 1030;
+    }
+
+    .search-box-wrap {
+      position: relative;
+      width: 290px;
+    }
+
+    .search-box-wrap input {
+      padding-left: 34px;
+      background-color: var(--app-bg);
+      border: 1px solid var(--border-color);
+      font-size: 13px;
+      border-radius: 8px;
+    }
+
+    .search-box-wrap i {
+      position: absolute;
+      left: 11px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-sub);
+    }
+
+    /* Bootstrap Card Overrides for Admin Feel */
+    .admin-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.16);
+    }
+
+    .kpi-icon-circle {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+    }
+
+    /* Page View Visibility */
+    .admin-page {
+      display: none;
+      padding: 22px 24px 40px;
+    }
+    .admin-page.active {
+      display: block;
+    }
+
+    /* 3D Twin Viewport Container inside Admin Card */
+    #twin-viewport-card {
+      position: relative;
+      height: 680px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      background: #060a12;
+    }
+
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+    }
+
+    .twin-overlay-panel {
+      position: absolute;
+      z-index: 15;
+      background: rgba(13, 20, 36, 0.86);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(86, 134, 214, 0.32);
+      border-radius: 12px;
+      color: #f1f5f9;
+    }
+
+    #twin-left-inspector {
+      top: 14px;
+      left: 14px;
+      bottom: 72px;
+      width: 305px;
+      padding: 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #twin-right-council {
+      top: 14px;
+      right: 14px;
+      bottom: 72px;
+      width: 310px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #twin-bottom-bar {
+      left: 14px;
+      right: 14px;
+      bottom: 12px;
+      height: 50px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    #hover-tooltip {
+      position: fixed;
+      z-index: 1500;
+      width: 230px;
+      padding: 11px 13px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+    #hover-tooltip.visible { opacity: 1; }
+
+    /* Plant Simulation Stacked Bar */
+    .ps-stack-bar {
+      display: flex;
+      height: 14px;
+      width: 100%;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #1e293b;
+    }
+
+    @media (max-width: 992px) {
+      #admin-sidebar { transform: translateX(-100%); }
+      body.mobile-sidebar-open #admin-sidebar { transform: translateX(0); }
+      #main-wrapper { margin-left: 0 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =====================================================
+       PAGE 1: ENTERPRISE BOOTSTRAP LOGIN SCREEN
+       ===================================================== -->
+  <section id="view-login">
+    <div class="auth-wrapper row g-0">
+      <div class="col-lg-5 auth-brand-side">
+        <div>
+          <div class="d-flex align-items-center gap-2 mb-4">
+            <span class="badge bg-danger px-2 py-1 fw-bold">SK hynix</span>
+            <span class="small fw-semibold text-info">M16 FAB MES v6.0</span>
+          </div>
+          <h2 class="fw-bold mb-3">M16 Smart Fab<br/>Digital Twin Admin</h2>
+          <p class="small text-white-50 lh-base">
+            HBM3E·선단 DRAM 양산 라인의 실시간 3D 설비 관제, 공정 파라미터 시뮬레이션 및 Plant Simulation 기반 가동률 리포트 통합 관리자 포털입니다.
+          </p>
+        </div>
+
+        <div class="border-top border-white border-opacity-10 pt-3 small text-white-50">
+          <div class="d-flex justify-content-between mb-1">
+            <span>시스템 상태</span>
+            <span class="text-success fw-semibold">● Online (Cluster #04)</span>
+          </div>
+          <div class="d-flex justify-content-between">
+            <span>보안 등급</span>
+            <span>L3 Fab Control SSO</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-7 auth-form-side">
+        <h4 class="fw-bold mb-1">관리자 시스템 로그인</h4>
+        <p class="text-secondary small mb-4">사번 및 직무 권한을 확인한 후 대시보드에 접속하십시오.</p>
+
+        <form id="login-form">
+        <p class="small">로컬 시연 로그인입니다. 실제 비밀번호를 입력하지 마세요.</p>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-secondary">사번 / 엔지니어 ID</label>
+            <div class="input-group">
+              <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-person-badge"></i></span>
+              <input type="text" id="login-emp-id" class="form-control bg-dark text-white border-secondary" value="M16-ENG-2048" required />
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-secondary">SSO 비밀번호</label>
+            <div class="input-group">
+              <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-shield-lock"></i></span>
+              <input type="password" id="login-pw" autocomplete="off" aria-label="모의 비밀번호" class="form-control bg-dark text-white border-secondary" value="••••••••••••" required />
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-secondary">접속 직무 권한 (Role)</label>
+            <select id="login-role" class="form-select bg-dark text-white border-secondary">
+              <option value="공정기술 엔지니어">공정기술 엔지니어 (Process Engineering)</option>
+              <option value="설비보전 파트장">설비보전 파트장 (Equipment Maintenance)</option>
+              <option value="Fab 생산관리 총괄">Fab 생산관리 총괄 (Fab Production Manager)</option>
+            </select>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="rememberMe" checked />
+              <label class="form-check-label small text-secondary" for="rememberMe">세션 유지 (8시간)</label>
+            </div>
+            <span class="small text-info">비밀번호 초기화 문의: 내선 4119</span>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
+            <i class="bi bi-box-arrow-in-right me-1"></i> 관리자 대시보드 접속
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================
+       AUTHENTICATED BOOTSTRAP ADMIN SHELL
+       ===================================================== -->
+  <div id="admin-shell">
+    <!-- Left Navigation Sidebar -->
+    <aside id="admin-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon-box">M16</div>
+        <div class="hide-on-collapse">
+          <div class="fw-bold fs-6 lh-1">M16 Smart Fab</div>
+          <small class="text-secondary" style="font-size: 11px;">Digital Twin MES</small>
+        </div>
+      </div>
+
+      <div class="sidebar-user-box">
+        <div class="user-avatar" id="sidebar-avatar">EN</div>
+        <div class="hide-on-collapse overflow-hidden">
+          <div class="fw-bold small text-truncate" id="sidebar-user-name">M16-ENG-2048</div>
+          <div class="text-info" style="font-size: 11px;" id="sidebar-user-role">공정기술 엔지니어</div>
+        </div>
+      </div>
+
+      <div class="sidebar-menu">
+        <div class="menu-section-title">Main Navigation</div>
+        <a class="nav-item-link active" data-page="page-dashboard">
+          <i class="bi bi-speedometer2"></i>
+          <span class="hide-on-collapse">통합 대시보드</span>
+        </a>
+        <a class="nav-item-link" data-page="page-3d-control">
+          <i class="bi bi-cpu"></i>
+          <span class="hide-on-collapse">3D 실시간 관제·제어</span>
+          <span class="badge bg-info text-dark ms-auto hide-on-collapse">LIVE</span>
+        </a>
+        <a class="nav-item-link" data-page="page-reports">
+          <i class="bi bi-file-earmark-bar-graph"></i>
+          <span class="hide-on-collapse">시뮬레이션 리포트</span>
+        </a>
+
+        <div class="menu-section-title mt-3">Operations & Logs</div>
+        <a class="nav-item-link" data-page="page-alarms">
+          <i class="bi bi-exclamation-triangle"></i>
+          <span class="hide-on-collapse">설비 알람 및 PM 이력</span>
+          <span class="badge bg-danger ms-auto hide-on-collapse" id="sidebar-alarm-badge">3</span>
+        </a>
+      </div>
+
+      <div class="p-3 border-top border-secondary border-opacity-25">
+        <button id="btn-sidebar-logout" class="btn btn-outline-danger btn-sm w-100 d-flex align-items-center justify-content-center gap-2">
+          <i class="bi bi-box-arrow-left"></i>
+          <span class="hide-on-collapse">로그아웃</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div id="main-wrapper">
+      <!-- Top Admin Navbar -->
+      <header id="admin-topbar">
+        <div class="d-flex align-items-center gap-3">
+          <button id="btn-toggle-sidebar" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-list fs-5"></i>
+          </button>
+
+          <div class="search-box-wrap d-none d-md-block">
+            <i class="bi bi-search"></i>
+            <input type="text" id="global-search-input" class="form-control form-control-sm" placeholder="설비 ID, Lot, 알람 코드 빠른 검색..." />
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+          <!-- Theme Toggle -->
+          <button id="btn-theme-toggle" class="btn btn-sm btn-outline-secondary" title="다크/라이트 모드 전환">
+            <i class="bi bi-moon-stars-fill" id="theme-icon"></i>
+          </button>
+
+          <!-- Notification Dropdown -->
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary position-relative" data-bs-toggle="dropdown">
+              <i class="bi bi-bell"></i>
+              <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="top-notif-count">3</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-lg" style="width: 310px;">
+              <li class="dropdown-header fw-bold d-flex justify-content-between">
+                <span>실시간 Fab 알람 알림</span>
+                <span class="badge bg-primary">New</span>
+              </li>
+              <li><hr class="dropdown-divider" /></li>
+              <li>
+                <a class="dropdown-item small py-2" href="#" onclick="window.navTo('page-alarms')">
+                  <div class="fw-bold text-danger"><i class="bi bi-exclamation-circle me-1"></i>ETCH 챔버 RUL 임계치 경고</div>
+                  <div class="text-secondary" style="font-size: 11px;">잔여 수명 18.4% 도달 — 선제적 PM 권고</div>
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item small py-2" href="#" onclick="window.navTo('page-reports')">
+                  <div class="fw-bold text-info"><i class="bi bi-check-circle me-1"></i>Batch 시뮬레이션 리포트 준비됨</div>
+                  <div class="text-secondary" style="font-size: 11px;">Tick #101~#103 공정 밸런싱 분석 완료</div>
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <!-- User Profile Dropdown -->
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-2" data-bs-toggle="dropdown">
+              <i class="bi bi-person-circle text-info"></i>
+              <span id="topbar-user-label" class="fw-semibold">M16-ENG-2048</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow">
+              <li><span class="dropdown-item-text small text-secondary" id="topbar-role-label">공정기술 엔지니어</span></li>
+              <li><hr class="dropdown-divider" /></li>
+              <li><a class="dropdown-item small" href="#" onclick="window.navTo('page-3d-control')"><i class="bi bi-sliders me-2"></i>3D 설비 제어 콘솔</a></li>
+              <li><a class="dropdown-item small" href="#" onclick="window.navTo('page-reports')"><i class="bi bi-graph-up me-2"></i>분석 리포트 조회</a></li>
+              <li><hr class="dropdown-divider" /></li>
+              <li><a class="dropdown-item small text-danger" href="#" id="dropdown-logout"><i class="bi bi-box-arrow-right me-2"></i>로그아웃</a></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+
+      <!-- =====================================================
+           ADMIN VIEW A: DASHBOARD OVERVIEW (BOOTSTRAP ADMIN HOME)
+           ===================================================== -->
+      <main id="page-dashboard" class="admin-page active">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+          <div>
+            <h4 class="fw-bold mb-1">M16 Fab 운영 종합 대시보드 (Operations Overview)</h4>
+            <nav aria-label="breadcrumb">
+              <ol class="breadcrumb small mb-0">
+                <li class="breadcrumb-item"><a href="#" class="text-decoration-none">Home</a></li>
+                <li class="breadcrumb-item active">통합 대시보드</li>
+              </ol>
+            </nav>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary btn-sm" onclick="window.navTo('page-3d-control')">
+              <i class="bi bi-cpu me-1"></i>3D 설비 제어 열기
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="window.navTo('page-reports')">
+              <i class="bi bi-file-earmark-bar-graph me-1"></i>시뮬레이션 리포트
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Admin KPI Cards -->
+        <div class="row g-3 mb-4">
+          <div class="col-xl-3 col-md-6">
+            <div class="admin-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <span class="text-secondary small fw-semibold">평균 EDS 수율 (Yield)</span>
+                  <h3 class="fw-bold mt-1 mb-1" id="ov-kpi-yield">98.48%</h3>
+                  <span class="badge bg-success bg-opacity-10 text-success small"><i class="bi bi-arrow-up-short"></i>+0.34% vs 목표</span>
+                </div>
+                <div class="kpi-icon-circle bg-success bg-opacity-10 text-success">
+                  <i class="bi bi-check2-circle"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-xl-3 col-md-6">
+            <div class="admin-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <span class="text-secondary small fw-semibold">설비 종합 효율 (OEE)</span>
+                  <h3 class="fw-bold mt-1 mb-1" id="ov-kpi-oee">91.2%</h3>
+                  <span class="badge bg-info bg-opacity-10 text-info small">가동 설비 3 / 3 Units</span>
+                </div>
+                <div class="kpi-icon-circle bg-info bg-opacity-10 text-info">
+                  <i class="bi bi-gear-wide-connected"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-xl-3 col-md-6">
+            <div class="admin-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <span class="text-secondary small fw-semibold">실시간 Fab 전력 부하</span>
+                  <h3 class="fw-bold mt-1 mb-1" id="ov-kpi-power">1,210 kW</h3>
+                  <span class="badge bg-warning bg-opacity-10 text-warning small">OHT 반송 62.5초</span>
+                </div>
+                <div class="kpi-icon-circle bg-warning bg-opacity-10 text-warning">
+                  <i class="bi bi-lightning-charge"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-xl-3 col-md-6">
+            <div class="admin-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <span class="text-secondary small fw-semibold">웨이퍼 단위 제조원가</span>
+                  <h3 class="fw-bold mt-1 mb-1" id="ov-kpi-cost">$1,160</h3>
+                  <span class="badge bg-primary bg-opacity-10 text-primary small">누적 출하 375 Wafers</span>
+                </div>
+                <div class="kpi-icon-circle bg-primary bg-opacity-10 text-primary">
+                  <i class="bi bi-currency-dollar"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Middle Row: Main Trend Chart + Station Health Progress -->
+        <div class="row g-3 mb-4">
+          <div class="col-lg-8">
+            <div class="admin-card p-3 h-100">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-graph-up-arrow text-primary me-2"></i>공정 수율(%) 및 전력 소모(kW) 실시간 추이</h6>
+                <span class="badge bg-secondary bg-opacity-25 text-secondary">최근 시뮬레이션 데이터</span>
+              </div>
+              <div style="height: 260px;">
+                <canvas id="ov-main-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-4">
+            <div class="admin-card p-3 h-100 d-flex flex-column justify-content-between">
+              <div>
+                <h6 class="fw-bold mb-3"><i class="bi bi-hdd-rack text-info me-2"></i>핵심 설비 잔여 수명(RUL) 현황</h6>
+
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between small mb-1">
+                    <span class="fw-semibold">EUV 노광기 #01</span>
+                    <span class="text-success fw-bold" id="ov-rul-euv">82.5%</span>
+                  </div>
+                  <div class="progress" style="height: 8px;">
+                    <div class="progress-bar bg-success" id="ov-bar-euv" style="width: 82.5%"></div>
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between small mb-1">
+                    <span class="fw-semibold">ETCH 식각 챔버 #02</span>
+                    <span class="text-info fw-bold" id="ov-rul-etch">100.0% (PM 완료)</span>
+                  </div>
+                  <div class="progress" style="height: 8px;">
+                    <div class="progress-bar bg-info" id="ov-bar-etch" style="width: 100%"></div>
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between small mb-1">
+                    <span class="fw-semibold">HBM TSV 적층기</span>
+                    <span class="text-success fw-bold" id="ov-rul-tsv">84.1%</span>
+                  </div>
+                  <div class="progress" style="height: 8px;">
+                    <div class="progress-bar bg-success" id="ov-bar-tsv" style="width: 84.1%"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="alert alert-info py-2 px-3 small mb-0">
+                <i class="bi bi-info-circle me-1"></i> 3D 관제 메뉴에서 각 설비를 클릭하여 부하율과 온도를 개별 제어할 수 있습니다.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Row: Recent Operations DataTable -->
+        <div class="admin-card p-3">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0"><i class="bi bi-table text-warning me-2"></i>최근 공정 이벤트 및 AI 의사결정 로그</h6>
+            <button class="btn btn-sm btn-outline-secondary" onclick="window.navTo('page-alarms')">전체 이력 보기 →</button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 small">
+              <thead>
+                <tr>
+                  <th>Tick</th>
+                  <th>발생 시각</th>
+                  <th>대상 설비</th>
+                  <th>이벤트 유형</th>
+                  <th>AI 위원회 권고 및 제어 조치</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody id="ov-recent-logs-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+
+      <!-- =====================================================
+           ADMIN VIEW B: 3D MONITORING & STATION CONTROL
+           ===================================================== -->
+      <section id="page-3d-control" class="admin-page">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+          <div>
+            <h4 class="fw-bold mb-1">3D 실시간 디지털 트윈 관제 및 설비 개별 제어</h4>
+            <p class="text-secondary small mb-0">3D 설비 클릭 시 하단 선택 링이 이동하며 좌측 인스펙터에서 해당 장비의 설정치를 개별 조정할 수 있습니다.</p>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-success px-3 py-2" id="twin-mode-badge">HISTORY REPLAY</span>
+            <span class="badge bg-dark border border-secondary px-3 py-2" id="twin-hud-clock">Tick #103</span>
+          </div>
+        </div>
+
+        <div id="twin-viewport-card">
+          <div id="canvas-container"></div>
+
+          <!-- Left Per-Equipment Inspector -->
+          <div id="twin-left-inspector" class="twin-overlay-panel">
+            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary border-opacity-25 pb-2">
+              <span class="fw-bold small"><i class="bi bi-sliders text-info me-1"></i>설비 개별 설정치</span>
+              <button id="btn-reset-history" class="btn btn-xs btn-outline-light py-0 px-2" style="font-size: 11px;">이력 복귀</button>
+            </div>
+
+            <div class="btn-group btn-group-sm w-100" role="group">
+              <button type="button" class="btn btn-outline-info st-btn active" data-station="PHOTO_EUV">EUV 노광</button>
+              <button type="button" class="btn btn-outline-info st-btn" data-station="ETCH">ETCH 식각</button>
+              <button type="button" class="btn btn-outline-info st-btn" data-station="HBM_TSV">HBM TSV</button>
+            </div>
+
+            <div>
+              <div class="d-flex justify-content-between small text-secondary mb-1">
+                <span>투입 속도 배율 (Feed Rate)</span>
+                <strong class="text-info" id="val-feed">1.0x</strong>
+              </div>
+              <input type="range" class="form-range" id="inp-feed" min="0.2" max="1.5" step="0.1" value="1.0" />
+            </div>
+
+            <div>
+              <div class="d-flex justify-content-between small text-secondary mb-1">
+                <span>목표 가동 부하율 (Load Ratio)</span>
+                <strong class="text-info" id="val-load">80%</strong>
+              </div>
+              <input type="range" class="form-range" id="inp-load" min="30" max="100" step="5" value="80" />
+            </div>
+
+            <div>
+              <div class="d-flex justify-content-between small text-secondary mb-1">
+                <span>챔버 설정 온도 (Temp)</span>
+                <strong class="text-info" id="val-temp">65.0°C</strong>
+              </div>
+              <input type="range" class="form-range" id="inp-temp" min="20" max="90" step="1" value="65" />
+            </div>
+
+            <div>
+              <div class="d-flex justify-content-between small text-secondary mb-1">
+                <span>잔여 유효 수명 (RUL 설정)</span>
+                <strong class="text-info" id="val-rul">85%</strong>
+              </div>
+              <input type="range" class="form-range" id="inp-rul" min="5" max="100" step="5" value="85" />
+            </div>
+
+            <button id="btn-apply-params" class="btn btn-primary btn-sm w-100 fw-bold">
+              <i class="bi bi-check-lg me-1"></i>선택 설비 설정값 즉시 반영
+            </button>
+
+            <div class="row g-2">
+              <div class="col-6">
+                <button id="btn-exec-pm" class="btn btn-outline-success btn-sm w-100 fw-semibold" style="font-size: 11.5px;">
+                  <i class="bi bi-wrench me-1"></i>예방정비(PM)
+                </button>
+              </div>
+              <div class="col-6">
+                <button id="btn-exec-bm" class="btn btn-outline-danger btn-sm w-100 fw-semibold" style="font-size: 11.5px;">
+                  <i class="bi bi-lightning-fill me-1"></i>돌발고장(BM)
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-auto pt-2 border-top border-secondary border-opacity-25">
+              <div class="d-flex justify-content-between small text-secondary mb-1">
+                <span>Plant Sim 배치 실행</span>
+                <span class="text-info" id="oht-summary-mini">OHT 22대 가동</span>
+              </div>
+              <div class="input-group input-group-sm">
+                <select id="sel-batch-ticks" class="form-select bg-dark text-white border-secondary">
+                  <option value="6">6 틱 (3시간)</option>
+                  <option value="12" selected>12 틱 (6시간)</option>
+                  <option value="24">24 틱 (12시간)</option>
+                  <option value="48">48 틱 (24시간)</option>
+                </select>
+                <button id="btn-run-sim" class="btn btn-success fw-bold">▶ 완료 후 리포트</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Dual AI Council Panel -->
+          <div id="twin-right-council" class="twin-overlay-panel">
+            <div class="p-2 px-3 border-bottom border-secondary border-opacity-25 d-flex justify-content-between align-items-center">
+              <span class="fw-bold small"><i class="bi bi-robot text-primary me-1"></i>듀얼 AI 의사결정 위원회</span>
+              <span class="badge bg-secondary" id="ai-badge" style="font-size: 10px;">자율 운전</span>
+            </div>
+            <div id="debate-feed" class="p-3 overflow-auto flex-grow-1 d-flex flex-column gap-2 small"></div>
+            <div class="p-2 px-3 bg-info bg-opacity-10 border-top border-secondary border-opacity-25 small">
+              <div class="fw-bold text-info mb-1" style="font-size: 11px;">최종 합의 제어 액션</div>
+              <pre id="ai-action-json" class="mb-0 text-light" style="font-size: 10.5px; white-space: pre-wrap;">기존 파라미터 유지</pre>
+            </div>
+          </div>
+
+          <!-- Bottom Timeline Dock -->
+          <div id="twin-bottom-bar" class="twin-overlay-panel">
+            <div class="btn-group btn-group-sm">
+              <button id="btn-prev" class="btn btn-outline-light"><i class="bi bi-skip-backward-fill"></i></button>
+              <button id="btn-play" class="btn btn-primary"><i class="bi bi-play-fill"></i></button>
+              <button id="btn-next" class="btn btn-outline-light"><i class="bi bi-skip-forward-fill"></i></button>
+            </div>
+            <input type="range" class="form-range flex-grow-1" id="timeline-slider" min="0" max="2" value="2" />
+            <span class="small fw-bold text-info text-nowrap" id="timeline-label">3 / 3</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================
+           ADMIN VIEW C: PLANT SIMULATION COMPLETION REPORTS
+           ===================================================== -->
+      <section id="page-reports" class="admin-page">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+          <div>
+            <h4 class="fw-bold mb-1">Plant Simulation 완료 분석 리포트 & 공정 트렌드</h4>
+            <p class="text-secondary small mb-0" id="rep-page-subtitle">최근 시뮬레이션 실행 구간 통계 분석</p>
+          </div>
+          <div class="d-flex gap-2">
+            <select id="rep-run-selector" class="form-select form-select-sm" style="width: 250px;"></select>
+            <button id="btn-download-csv" class="btn btn-outline-success btn-sm">
+              <i class="bi bi-filetype-csv me-1"></i>CSV 내보내기
+            </button>
+            <button id="btn-download-html" class="btn btn-primary btn-sm">
+              <i class="bi bi-download me-1"></i>HTML 리포트 저장
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Summary KPI Cards -->
+        <div class="row g-3 mb-4">
+          <div class="col-md-3">
+            <div class="admin-card p-3">
+              <span class="text-secondary small">총 생산 완료 웨이퍼</span>
+              <h3 class="fw-bold text-info mt-1 mb-0" id="rep-kpi-wafers">375 Wafers</h3>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="admin-card p-3">
+              <span class="text-secondary small">평균 EDS 수율 (Yield)</span>
+              <h3 class="fw-bold text-success mt-1 mb-0" id="rep-kpi-yield">98.34%</h3>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="admin-card p-3">
+              <span class="text-secondary small">누적 전력 소모량</span>
+              <h3 class="fw-bold text-warning mt-1 mb-0" id="rep-kpi-energy">2,090 kWh</h3>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="admin-card p-3">
+              <span class="text-secondary small">평균 웨이퍼 단위 원가</span>
+              <h3 class="fw-bold text-primary mt-1 mb-0" id="rep-kpi-cost">$1,192</h3>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 Analytical Charts -->
+        <div class="row g-3 mb-4">
+          <div class="col-lg-6">
+            <div class="admin-card p-3">
+              <h6 class="fw-bold mb-3">EDS 수율(%) 및 웨이퍼 단위 원가($) 시계열 추이</h6>
+              <div style="height: 230px;"><canvas id="chart-yield-cost"></canvas></div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="admin-card p-3">
+              <h6 class="fw-bold mb-3">설비별 잔여 유효 수명 (RUL %) 변화 추이</h6>
+              <div style="height: 230px;"><canvas id="chart-rul-trend"></canvas></div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="admin-card p-3">
+              <h6 class="fw-bold mb-3">실시간 전력 소모량(kW) 및 평균 WIP 버퍼 적체율(%)</h6>
+              <div style="height: 230px;"><canvas id="chart-power-wip"></canvas></div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="admin-card p-3">
+              <h6 class="fw-bold mb-3">설비별 가동 상태 점유율 (Working / Blocked / PM / BM)</h6>
+              <div style="height: 230px;"><canvas id="chart-station-util"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Station Utilization Table -->
+        <div class="admin-card p-3 mb-3">
+          <h6 class="fw-bold mb-3">설비별 상세 가동 통계표 (Plant Simulation Station Statistics)</h6>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle small mb-0">
+              <thead>
+                <tr>
+                  <th>설비명 (Station)</th>
+                  <th style="width: 30%;">상태 점유율 분포</th>
+                  <th>정상 가동률</th>
+                  <th>병목/대기</th>
+                  <th>정비(PM/BM)</th>
+                  <th>최종 RUL</th>
+                  <th>최종 온도</th>
+                </tr>
+              </thead>
+              <tbody id="rep-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="alert alert-warning mb-0 small" id="rep-diagnosis-box"></div>
+      </section>
+
+      <!-- =====================================================
+           ADMIN VIEW D: EQUIPMENT ALARMS & PM LOGS
+           ===================================================== -->
+      <section id="page-alarms" class="admin-page">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+          <div>
+            <h4 class="fw-bold mb-1">설비 알람 및 예방·돌발 정비(PM/BM) 이력 관리</h4>
+            <p class="text-secondary small mb-0">실시간 임계치 초과 알람 승인 및 정비 스케줄 이력을 조회합니다.</p>
+          </div>
+          <div class="d-flex gap-2">
+            <select id="alarm-filter-type" class="form-select form-select-sm" style="width: 160px;">
+              <option value="ALL">전체 유형</option>
+              <option value="CRITICAL">위험 / BM</option>
+              <option value="PM">예방정비 (PM)</option>
+              <option value="TUNED">수동 제어</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="admin-card p-3">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle small mb-0">
+              <thead>
+                <tr>
+                  <th>알람 ID</th>
+                  <th>Tick / 시각</th>
+                  <th>대상 설비</th>
+                  <th>등급</th>
+                  <th>상세 내용</th>
+                  <th>조치 상태</th>
+                  <th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="alarm-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Floating Tooltip for 3D Hover -->
+  <div id="hover-tooltip" class="twin-overlay-panel">
+    <div class="d-flex justify-content-between align-items-center border-bottom border-secondary border-opacity-25 pb-1 mb-2">
+      <strong id="tt-title" class="small">EUV 노광기</strong>
+      <span id="tt-state" class="badge bg-success" style="font-size: 10px;">RUNNING</span>
+    </div>
+    <div class="row g-1 small text-secondary">
+      <div class="col-6">RUL: <strong class="text-white" id="tt-rul">88.0%</strong></div>
+      <div class="col-6">온도: <strong class="text-white" id="tt-temp">22.1°C</strong></div>
+      <div class="col-6">부하율: <strong class="text-white" id="tt-load">78%</strong></div>
+      <div class="col-6">Feed: <strong class="text-white" id="tt-feed">1.0x</strong></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ==========================================
+    // 1. STATE & DATA STORE
+    // ==========================================
+    const MOCK_HISTORY = [
+      {
+        tick: 101,
+        timestamp: "2026-11-25 13:30",
+        kpi: { eds_yield: 98.65, power_kw: 1390, unit_cost: 1170 },
+        wip_buffers: { PHOTO_EUV: 45, ETCH: 52, HBM_TSV: 40 },
+        equipments: {
+          PHOTO_EUV: { status: "RUNNING", rul: 88.0, chamber_temp: 22.1, load_ratio: 0.78, feed_rate: 1.0 },
+          ETCH:      { status: "RUNNING", rul: 61.5, chamber_temp: 65.0, load_ratio: 0.85, feed_rate: 1.0 },
+          HBM_TSV:   { status: "RUNNING", rul: 91.2, chamber_temp: 41.0, load_ratio: 0.72, feed_rate: 1.0 }
+        },
+        trigger_reason: null,
+        debate: null,
+        final_action: null
+      },
+      {
+        tick: 102,
+        timestamp: "2026-11-25 14:00",
+        kpi: { eds_yield: 97.90, power_kw: 1580, unit_cost: 1245 },
+        wip_buffers: { PHOTO_EUV: 62, ETCH: 86, HBM_TSV: 78 },
+        equipments: {
+          PHOTO_EUV: { status: "RUNNING", rul: 84.2, chamber_temp: 22.4, load_ratio: 0.82, feed_rate: 0.4 },
+          ETCH:      { status: "RUNNING", rul: 18.4, chamber_temp: 74.8, load_ratio: 0.96, feed_rate: 1.0 },
+          HBM_TSV:   { status: "RUNNING", rul: 87.0, chamber_temp: 44.5, load_ratio: 0.88, feed_rate: 1.0 }
+        },
+        trigger_reason: "RUL_CRITICAL:ETCH (18.4%)",
+        debate: [
+          { speaker: "ChatGPT (생산기술)", turn: 1, text: "ETCH 챔버 RUL이 18.4%까지 하락했습니다. 상류 EUV 투입 속도를 40%로 감속하여 버퍼 과부하를 억제해야 합니다." },
+          { speaker: "Gemini (설비·원가)", turn: 2, text: "챔버 온도가 74.8°C로 상승했습니다. 돌발 고장(BM) 방지 및 비용 절감을 위해 즉시 예방 정비(PM)를 승인합니다." }
+        ],
+        final_action: { PHOTO_EUV_feed_rate: 0.4, ETCH_action: "SCHEDULE_PM_NOW" }
+      },
+      {
+        tick: 103,
+        timestamp: "2026-11-25 14:30",
+        kpi: { eds_yield: 98.48, power_kw: 1210, unit_cost: 1160 },
+        wip_buffers: { PHOTO_EUV: 48, ETCH: 35, HBM_TSV: 50 },
+        equipments: {
+          PHOTO_EUV: { status: "RUNNING", rul: 82.5, chamber_temp: 22.0, load_ratio: 0.65, feed_rate: 1.0 },
+          ETCH:      { status: "MAINTENANCE", maint_type: "PM", rul: 100.0, chamber_temp: 30.0, load_ratio: 0.0, feed_rate: 0.0 },
+          HBM_TSV:   { status: "RUNNING", rul: 84.1, chamber_temp: 41.2, load_ratio: 0.75, feed_rate: 1.0 }
+        },
+        trigger_reason: "PM_EXECUTED:ETCH",
+        debate: null,
+        final_action: { status: "PM 완료 및 정상 라인 밸런싱 복귀" }
+      }
+    ];
+
+    const equipConfigs = [
+      { id: 'PHOTO_EUV', label: 'EUV 노광기 #01', x: -7, size: [4.2, 3.2, 3.6], optTemp: 22.0 },
+      { id: 'ETCH',      label: '식각 챔버 #02',  x: 0,  size: [3.8, 2.8, 3.4], optTemp: 64.0 },
+      { id: 'HBM_TSV',   label: 'HBM TSV 적층기', x: 7,  size: [4.0, 3.4, 3.6], optTemp: 42.0 }
+    ];
+
+    let alarmLogs = [
+      { id: "ALM-1021", tick: 102, time: "14:00", station: "ETCH", type: "CRITICAL", desc: "ETCH 챔버 RUL 18.4% 임계치 미만 및 챔버 온도 74.8°C 초과", ack: false },
+      { id: "ALM-1022", tick: 102, time: "14:00", station: "PHOTO_EUV", type: "TUNED", desc: "AI 위원회 합의에 따른 상류 투입 속도(Feed Rate) 0.4x 자동 감속", ack: true },
+      { id: "ALM-1031", tick: 103, time: "14:30", station: "ETCH", type: "PM", desc: "ETCH 식각 챔버 예방정비(PM) 완료 — RUL 100% 복원", ack: true }
+    ];
+
+    let historyIdx = 2;
+    let selectedStationId = 'PHOTO_EUV';
+    let sandboxState = JSON.parse(JSON.stringify(MOCK_HISTORY[2]));
+    let simulationRunArchive = [
+      { id: "default", name: "기본 리플레이 이력 (Tick #101 ~ #103)", snapshots: JSON.parse(JSON.stringify(MOCK_HISTORY)) }
+    ];
+    let activeReportRunId = "default";
+    let charts = {};
+
+    // ==========================================
+    // 2. ADMIN NAVIGATION & AUTHENTICATION
+    // ==========================================
+    window.navTo = function(pageId) {
+      document.querySelectorAll('.admin-page').forEach(p => p.classList.remove('active'));
+      document.getElementById(pageId).classList.add('active');
+
+      document.querySelectorAll('.nav-item-link').forEach(link => {
+        link.classList.toggle('active', link.dataset.page === pageId);
+      });
+
+      if (pageId === 'page-dashboard') renderOverviewPage();
+      if (pageId === 'page-3d-control') handleResize();
+      if (pageId === 'page-reports') renderReportDashboard();
+      if (pageId === 'page-alarms') renderAlarmTable();
+    };
+
+    document.querySelectorAll('.nav-item-link').forEach(link => {
+      link.addEventListener('click', () => window.navTo(link.dataset.page));
+    });
+
+    document.getElementById('login-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const empId = document.getElementById('login-emp-id').value.trim() || 'M16-ENG-2048';
+      const role = document.getElementById('login-role').value;
+
+      document.getElementById('sidebar-user-name').innerText = empId;
+      document.getElementById('sidebar-user-role').innerText = role;
+      document.getElementById('topbar-user-label').innerText = empId;
+      document.getElementById('topbar-role-label').innerText = role;
+      document.getElementById('sidebar-avatar').innerText = empId.slice(-2);
+
+      document.getElementById('view-login').classList.add('d-none');
+      document.getElementById('admin-shell').classList.add('active');
+      renderOverviewPage();
+    });
+
+    function doLogout() {
+      document.getElementById('admin-shell').classList.remove('active');
+      document.getElementById('view-login').classList.remove('d-none');
+    }
+    document.getElementById('btn-sidebar-logout').addEventListener('click', doLogout);
+    document.getElementById('dropdown-logout').addEventListener('click', doLogout);
+
+    document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
+      if (window.innerWidth <= 992) {
+        document.body.classList.toggle('mobile-sidebar-open');
+      } else {
+        document.body.classList.toggle('sidebar-collapsed');
+      }
+      setTimeout(handleResize, 240);
+    });
+
+    document.getElementById('btn-theme-toggle').addEventListener('click', () => {
+      const html = document.documentElement;
+      const next = html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-bs-theme', next);
+      document.getElementById('theme-icon').className = next === 'dark' ? 'bi bi-moon-stars-fill' : 'bi bi-sun-fill';
+      if (document.getElementById('page-dashboard').classList.contains('active')) renderOverviewPage();
+      if (document.getElementById('page-reports').classList.contains('active')) renderReportDashboard();
+    });
+
+    document.getElementById('global-search-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const q = e.target.value.trim().toUpperCase();
+        if (q.includes('EUV') || q.includes('ETCH') || q.includes('TSV')) {
+          window.navTo('page-3d-control');
+          if (q.includes('ETCH')) selectStation('ETCH');
+          else if (q.includes('TSV')) selectStation('HBM_TSV');
+          else selectStation('PHOTO_EUV');
+        } else {
+          window.navTo('page-alarms');
+        }
+      }
+    });
+
+    // ==========================================
+    // 3. OVERVIEW DASHBOARD RENDERER
+    // ==========================================
+    function renderOverviewPage() {
+      const latestRun = simulationRunArchive[0].snapshots;
+      const lastSnap = latestRun[latestRun.length - 1];
+
+      document.getElementById('ov-kpi-yield').innerText = `${lastSnap.kpi.eds_yield.toFixed(2)}%`;
+      document.getElementById('ov-kpi-power').innerText = `${Math.round(lastSnap.kpi.power_kw).toLocaleString()} kW`;
+      document.getElementById('ov-kpi-cost').innerText = `$${Math.round(lastSnap.kpi.unit_cost).toLocaleString()}`;
+
+      const euv = lastSnap.equipments.PHOTO_EUV.rul;
+      const etch = lastSnap.equipments.ETCH.rul;
+      const tsv = lastSnap.equipments.HBM_TSV.rul;
+
+      document.getElementById('ov-rul-euv').innerText = `${euv.toFixed(1)}%`;
+      document.getElementById('ov-bar-euv').style.width = `${euv}%`;
+      document.getElementById('ov-rul-etch').innerText = `${etch.toFixed(1)}%`;
+      document.getElementById('ov-bar-etch').style.width = `${etch}%`;
+      document.getElementById('ov-rul-tsv').innerText = `${tsv.toFixed(1)}%`;
+      document.getElementById('ov-bar-tsv').style.width = `${tsv}%`;
+
+      if (charts.ovMain) charts.ovMain.destroy();
+      const ctx = document.getElementById('ov-main-chart');
+      charts.ovMain = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: latestRun.map(s => `Tick #${s.tick}`),
+          datasets: [
+            {
+              label: 'EDS 수율 (%)',
+              data: latestRun.map(s => s.kpi.eds_yield),
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.14)',
+              fill: true,
+              yAxisID: 'y',
+              tension: 0.35
+            },
+            {
+              label: '전력 소모량 (kW)',
+              data: latestRun.map(s => s.kpi.power_kw),
+              borderColor: '#3b82f6',
+              yAxisID: 'y1',
+              tension: 0.35
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { position: 'left', min: 94, max: 100 },
+            y1: { position: 'right', grid: { drawOnChartArea: false } }
+          }
+        }
+      });
+
+      const tbody = document.getElementById('ov-recent-logs-tbody');
+      tbody.innerHTML = '';
+      alarmLogs.slice(0, 5).forEach(item => {
+        const badgeClass = item.type === 'CRITICAL' ? 'bg-danger' : item.type === 'PM' ? 'bg-info text-dark' : 'bg-primary';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="fw-bold">#${item.tick}</td>
+          <td>${item.time}</td>
+          <td><span class="badge bg-secondary">${item.station}</span></td>
+          <td><span class="badge ${badgeClass}">${item.type}</span></td>
+          <td>${item.desc}</td>
+          <td>${item.ack ? '<span class="text-success fw-semibold">확인됨</span>' : '<span class="text-warning fw-semibold">조치 필요</span>'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ==========================================
+    // 4. THREE.JS 3D DIGITAL TWIN SCENE
+    // ==========================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060a12);
+    scene.fog = new THREE.FogExp2(0x060a12, 0.02);
+
+    const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 1000);
+    camera.position.set(0, 14, 21);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2.1;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const dirLight = new THREE.DirectionalLight(0x93c5fd, 1.4);
+    dirLight.position.set(10, 20, 12);
+    scene.add(dirLight);
+    scene.add(new THREE.GridHelper(36, 36, 0x1e3a8a, 0x111c33));
+
+    const fabMeshes = {};
+    const interactiveObjects = [];
+
+    equipConfigs.forEach(cfg => {
+      const geo = new THREE.BoxGeometry(...cfg.size);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        roughness: 0.35,
+        metalness: 0.65,
+        emissive: 0x10b981,
+        emissiveIntensity: 0.3
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(cfg.x, cfg.size[1] / 2, 0);
+      mesh.userData = { equipId: cfg.id, label: cfg.label };
+
+      const edges = new THREE.EdgesGeometry(geo);
+      mesh.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.45 })));
+
+      scene.add(mesh);
+      fabMeshes[cfg.id] = mesh;
+      interactiveObjects.push(mesh);
+    });
+
+    const selectionRing = new THREE.Mesh(
+      new THREE.RingGeometry(2.5, 2.85, 32),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide })
+    );
+    selectionRing.rotation.x = -Math.PI / 2;
+    selectionRing.position.set(-7, 0.05, 0);
+    scene.add(selectionRing);
+
+    const ohtTrack = new THREE.Mesh(
+      new THREE.BoxGeometry(18, 0.14, 0.65),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.45 })
+    );
+    ohtTrack.position.set(0, 4.5, 0);
+    scene.add(ohtTrack);
+
+    const ohtCarriers = [];
+    for (let i = 0; i < 6; i++) {
+      const carrier = new THREE.Mesh(
+        new THREE.BoxGeometry(0.65, 0.45, 0.55),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, emissive: 0x38bdf8, emissiveIntensity: 0.6 })
+      );
+      carrier.position.set(-8 + i * 3.0, 4.2, 0);
+      carrier.userData = { offset: i / 6 };
+      scene.add(carrier);
+      ohtCarriers.push(carrier);
+    }
+
+    function handleResize() {
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      camera.aspect = rect.width / rect.height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(rect.width, rect.height);
+    }
+    window.addEventListener('resize', handleResize);
+
+    // ==========================================
+    // 5. 3D STATION SELECTION & PARAMETER CONTROL
+    // ==========================================
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const tooltip = document.getElementById('hover-tooltip');
+    let pointerDown = { x: 0, y: 0 };
+
+    renderer.domElement.addEventListener('mousemove', (e) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      tooltip.style.left = `${Math.min(e.clientX + 14, window.innerWidth - 245)}px`;
+      tooltip.style.top = `${Math.min(e.clientY + 14, window.innerHeight - 120)}px`;
+    });
+
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      pointerDown = { x: e.clientX, y: e.clientY };
+    });
+
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (Math.hypot(e.clientX - pointerDown.x, e.clientY - pointerDown.y) > 6) return;
+      const bounds = renderer.domElement.getBoundingClientRect();
+      const pointer = new THREE.Vector2(
+        ((e.clientX - bounds.left) / bounds.width) * 2 - 1,
+        1 - ((e.clientY - bounds.top) / bounds.height) * 2
+      );
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(interactiveObjects, false);
+      if (hits.length > 0) {
+        selectStation(hits[0].object.userData.equipId);
+      }
+    });
+
+    function selectStation(eqId) {
+      selectedStationId = eqId;
+      const cfg = equipConfigs.find(c => c.id === eqId);
+      if (cfg) selectionRing.position.x = cfg.x;
+
+      document.querySelectorAll('.st-btn').forEach(b => b.classList.toggle('active', b.dataset.station === eqId));
+
+      const st = sandboxState.equipments[eqId];
+      if (!st) return;
+
+      document.getElementById('inp-feed').value = st.feed_rate;
+      document.getElementById('val-feed').innerText = `${st.feed_rate.toFixed(1)}x`;
+
+      const loadPct = Math.round(st.load_ratio * 100);
+      document.getElementById('inp-load').value = loadPct;
+      document.getElementById('val-load').innerText = `${loadPct}%`;
+
+      document.getElementById('inp-temp').value = Math.round(st.chamber_temp);
+      document.getElementById('val-temp').innerText = `${st.chamber_temp.toFixed(1)}°C`;
+
+      document.getElementById('inp-rul').value = Math.round(st.rul);
+      document.getElementById('val-rul').innerText = `${Math.round(st.rul)}%`;
+    }
+
+    document.querySelectorAll('.st-btn').forEach(btn => {
+      btn.addEventListener('click', () => selectStation(btn.dataset.station));
+    });
+
+    document.getElementById('inp-feed').addEventListener('input', e => document.getElementById('val-feed').innerText = `${Number(e.target.value).toFixed(1)}x`);
+    document.getElementById('inp-load').addEventListener('input', e => document.getElementById('val-load').innerText = `${e.target.value}%`);
+    document.getElementById('inp-temp').addEventListener('input', e => document.getElementById('val-temp').innerText = `${Number(e.target.value).toFixed(1)}°C`);
+    document.getElementById('inp-rul').addEventListener('input', e => document.getElementById('val-rul').innerText = `${e.target.value}%`);
+
+    function syncVisuals(isCustom) {
+      const badge = document.getElementById('twin-mode-badge');
+      badge.innerText = isCustom ? 'CUSTOM SANDBOX' : 'HISTORY REPLAY';
+      badge.className = isCustom ? 'badge bg-primary px-3 py-2' : 'badge bg-success px-3 py-2';
+
+      document.getElementById('twin-hud-clock').innerText = `Tick #${sandboxState.tick} | ${sandboxState.timestamp}`;
+
+      const euvFeed = sandboxState.equipments.PHOTO_EUV.feed_rate;
+      const activeOht = Math.round(18 * euvFeed + Math.max(0, sandboxState.wip_buffers.ETCH - 60) * 0.25);
+      const ohtSec = (56.0 + activeOht * 0.45).toFixed(1);
+      document.getElementById('oht-summary-mini').innerText = `OHT ${activeOht}대 (${ohtSec}s)`;
+
+      Object.entries(sandboxState.equipments).forEach(([eqId, st]) => {
+        const mesh = fabMeshes[eqId];
+        const wip = sandboxState.wip_buffers[eqId] ?? 0;
+        if (st.status === 'MAINTENANCE' || st.rul < 25) {
+          mesh.material.emissive.setHex(0xef4444);
+          mesh.material.emissiveIntensity = 0.78;
+        } else if (wip >= 80 || st.rul < 50) {
+          mesh.material.emissive.setHex(0xf59e0b);
+          mesh.material.emissiveIntensity = 0.55;
+        } else {
+          mesh.material.emissive.setHex(0x10b981);
+          mesh.material.emissiveIntensity = 0.28;
+        }
+      });
+
+      document.getElementById('ai-badge').innerText = sandboxState.trigger_reason || '자율 운전';
+      const feedEl = document.getElementById('debate-feed');
+      feedEl.innerHTML = '';
+      if (sandboxState.debate && sandboxState.debate.length > 0) {
+        sandboxState.debate.forEach(d => {
+          const isGem = d.speaker.includes('Gemini');
+          const div = document.createElement('div');
+          div.className = `p-2 rounded border-start border-3 ${isGem ? 'border-primary bg-primary bg-opacity-10' : 'border-success bg-success bg-opacity-10'}`;
+          div.innerHTML = `<div class="fw-bold mb-1" style="font-size:11px;">${d.speaker}</div><div>${d.text}</div>`;
+          feedEl.appendChild(div);
+        });
+      } else {
+        feedEl.innerHTML = `<div class="text-center text-secondary my-auto">임계치 초과 이벤트 없음</div>`;
+      }
+      document.getElementById('ai-action-json').innerText = sandboxState.final_action
+        ? JSON.stringify(sandboxState.final_action, null, 2)
+        : '기존 공정 파라미터 유지';
+
+      selectStation(selectedStationId);
+    }
+
+    document.getElementById('btn-apply-params').addEventListener('click', () => {
+      const eq = sandboxState.equipments[selectedStationId];
+      eq.feed_rate = Number(document.getElementById('inp-feed').value);
+      eq.load_ratio = Number(document.getElementById('inp-load').value) / 100.0;
+      eq.chamber_temp = Number(document.getElementById('inp-temp').value);
+      eq.rul = Number(document.getElementById('inp-rul').value);
+      if (eq.rul > 0 && eq.status === 'MAINTENANCE') eq.status = 'RUNNING';
+
+      sandboxState.trigger_reason = `TUNED:${selectedStationId}`;
+      sandboxState.debate = [{
+        speaker: "엔지니어 수동 제어",
+        turn: 1,
+        text: `${selectedStationId} 설정치 변경 → Feed ${eq.feed_rate}x, 부하 ${Math.round(eq.load_ratio*100)}%, 온도 ${eq.chamber_temp}°C, RUL ${eq.rul}%`
+      }];
+      sandboxState.final_action = { station: selectedStationId, feed_rate: eq.feed_rate, load_ratio: eq.load_ratio, temp: eq.chamber_temp, rul: eq.rul };
+
+      alarmLogs.unshift({
+        id: `ALM-${Date.now().toString().slice(-4)}`,
+        tick: sandboxState.tick,
+        time: "방금 전",
+        station: selectedStationId,
+        type: "TUNED",
+        desc: `관리자 수동 파라미터 변경 (Feed ${eq.feed_rate}x, 부하 ${Math.round(eq.load_ratio*100)}%, RUL ${eq.rul}%)`,
+        ack: true
+      });
+      syncVisuals(true);
+    });
+
+    document.getElementById('btn-exec-pm').addEventListener('click', () => {
+      const eq = sandboxState.equipments[selectedStationId];
+      eq.status = 'MAINTENANCE';
+      eq.maint_type = 'PM';
+      eq.maint_remain = 2;
+      eq.rul = 100.0;
+      eq.load_ratio = 0.0;
+      sandboxState.kpi.unit_cost += 95;
+      sandboxState.trigger_reason = `MANUAL_PM:${selectedStationId}`;
+      sandboxState.debate = [{ speaker: "설비보전 파트", turn: 1, text: `${selectedStationId} 예방정비(PM) 시작 (RUL 100% 복원)` }];
+      sandboxState.final_action = { station: selectedStationId, action: "PM_STARTED" };
+
+      alarmLogs.unshift({
+        id: `ALM-${Date.now().toString().slice(-4)}`,
+        tick: sandboxState.tick,
+        time: "방금 전",
+        station: selectedStationId,
+        type: "PM",
+        desc: `${selectedStationId} 선제적 예방정비(PM) 투입 — RUL 100% 복원`,
+        ack: true
+      });
+      syncVisuals(true);
+    });
+
+    document.getElementById('btn-exec-bm').addEventListener('click', () => {
+      const eq = sandboxState.equipments[selectedStationId];
+      eq.status = 'MAINTENANCE';
+      eq.maint_type = 'BM';
+      eq.maint_remain = 6;
+      eq.rul = 0.0;
+      eq.load_ratio = 0.0;
+      sandboxState.kpi.eds_yield = Math.max(90.0, sandboxState.kpi.eds_yield - 1.4);
+      sandboxState.kpi.unit_cost += 380;
+      sandboxState.trigger_reason = `INJECTED_BM:${selectedStationId}`;
+      sandboxState.debate = [{ speaker: "Gemini (설비·원가)", turn: 1, text: `${selectedStationId} 돌발고장(BM) 발생! 긴급 복구 6틱 및 복구 비용 $4,500 반영.` }];
+      sandboxState.final_action = { station: selectedStationId, action: "BM_RECOVERY" };
+
+      alarmLogs.unshift({
+        id: `ALM-${Date.now().toString().slice(-4)}`,
+        tick: sandboxState.tick,
+        time: "방금 전",
+        station: selectedStationId,
+        type: "CRITICAL",
+        desc: `${selectedStationId} 돌발고장(BM) 발생 — 긴급 보전팀 호출`,
+        ack: false
+      });
+      updateAlarmBadges();
+      syncVisuals(true);
+    });
+
+    document.getElementById('btn-reset-history').addEventListener('click', () => {
+      sandboxState = JSON.parse(JSON.stringify(MOCK_HISTORY[historyIdx]));
+      syncVisuals(false);
+    });
+
+    // ==========================================
+    // 6. BATCH SIMULATION -> PLANT SIMULATION REPORT
+    // ==========================================
+    function stepPhysics(state) {
+      const pipeline = ["PHOTO_EUV", "ETCH", "HBM_TSV"];
+      let power = 430;
+      let loadSum = 0;
+
+      pipeline.forEach((eqId, idx) => {
+        const eq = state.equipments[eqId];
+        const cfg = equipConfigs.find(c => c.id === eqId);
+
+        if (eq.status === 'MAINTENANCE') {
+          eq.maint_remain = (eq.maint_remain || 2) - 1;
+          if (eq.maint_remain <= 0) {
+            eq.status = 'RUNNING';
+            eq.maint_type = null;
+            eq.rul = 100.0;
+            eq.load_ratio = 0.78;
+            eq.feed_rate = 1.0;
+          }
+          power += 90;
+          return;
+        }
+
+        const inFlow = idx === 0 ? 12 * eq.feed_rate : Math.min(14, state.wip_buffers[pipeline[idx - 1]] * 0.25);
+        const outFlow = 11 * eq.load_ratio;
+        state.wip_buffers[eqId] = Math.min(100, Math.max(10, Math.round(state.wip_buffers[eqId] + inFlow - outFlow)));
+
+        eq.chamber_temp = Number((eq.chamber_temp + (eq.load_ratio - 0.75) * 2.1).toFixed(1));
+        const tempStress = Math.max(0, (eq.chamber_temp - cfg.optTemp) * 0.14);
+        const deg = 0.75 + eq.load_ratio * 1.15 + tempStress;
+        eq.rul = Math.max(0.0, Number((eq.rul - deg).toFixed(1)));
+
+        if (eq.rul === 0.0) {
+          eq.status = 'MAINTENANCE';
+          eq.maint_type = 'BM';
+          eq.maint_remain = 6;
+          eq.load_ratio = 0.0;
+          state.kpi.unit_cost += 340;
+          state.kpi.eds_yield = Math.max(91.0, state.kpi.eds_yield - 1.1);
+        }
+
+        power += 375 * eq.load_ratio + Math.max(0, eq.chamber_temp - 40) * 2.4;
+        loadSum += eq.load_ratio;
+      });
+
+      state.tick += 1;
+      state.timestamp = `Sim +${state.tick - 103} Tick`;
+      state.kpi.power_kw = Math.round(power);
+      state.kpi.eds_yield = Number(Math.min(99.4, Math.max(91.0, state.kpi.eds_yield + (loadSum > 1.8 ? 0.05 : -0.09))).toFixed(2));
+      state.kpi.unit_cost = Math.round(1120 + (power / 15) + (100 - state.kpi.eds_yield) * 34);
+
+      return JSON.parse(JSON.stringify(state));
+    }
+
+    document.getElementById('btn-run-sim').addEventListener('click', () => {
+      const steps = Number(document.getElementById('sel-batch-ticks').value);
+      const snapshots = [];
+      for (let i = 0; i < steps; i++) {
+        snapshots.push(stepPhysics(sandboxState));
+      }
+
+      const runId = `run_${Date.now()}`;
+      const label = `실행 #${simulationRunArchive.length}: Tick #${snapshots[0].tick}~#${snapshots[snapshots.length - 1].tick} (${steps}틱)`;
+      simulationRunArchive.unshift({ id: runId, name: label, snapshots });
+      activeReportRunId = runId;
+
+      syncVisuals(true);
+      window.navTo('page-reports');
+    });
+
+    document.getElementById('rep-run-selector').addEventListener('change', (e) => {
+      activeReportRunId = e.target.value;
+      renderReportDashboard();
+    });
+
+    function renderReportDashboard() {
+      const sel = document.getElementById('rep-run-selector');
+      sel.innerHTML = '';
+      simulationRunArchive.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.innerText = item.name;
+        sel.appendChild(opt);
+      });
+      sel.value = activeReportRunId;
+
+      const runEntry = simulationRunArchive.find(r => r.id === activeReportRunId) || simulationRunArchive[0];
+      const snaps = runEntry.snapshots;
+      const count = snaps.length;
+
+      document.getElementById('rep-page-subtitle').innerText =
+        `${runEntry.name}  |  총 ${(count * 0.5).toFixed(1)}시간 공정 시뮬레이션 분석 결과`;
+
+      let sumYield = 0, sumPower = 0, sumCost = 0, wafers = 0;
+      const stats = {
+        PHOTO_EUV: { work: 0, wait: 0, pm: 0, bm: 0, finalRul: 0, finalTemp: 0 },
+        ETCH:      { work: 0, wait: 0, pm: 0, bm: 0, finalRul: 0, finalTemp: 0 },
+        HBM_TSV:   { work: 0, wait: 0, pm: 0, bm: 0, finalRul: 0, finalTemp: 0 }
+      };
+
+      const labels = [], yieldSeries = [], costSeries = [], powerSeries = [], avgWipSeries = [];
+      const rulEuv = [], rulEtch = [], rulTsv = [];
+
+      snaps.forEach(s => {
+        labels.push(`#${s.tick}`);
+        sumYield += s.kpi.eds_yield;
+        sumPower += s.kpi.power_kw;
+        sumCost += s.kpi.unit_cost;
+
+        yieldSeries.push(s.kpi.eds_yield);
+        costSeries.push(s.kpi.unit_cost);
+        powerSeries.push(s.kpi.power_kw);
+        avgWipSeries.push(Math.round((s.wip_buffers.PHOTO_EUV + s.wip_buffers.ETCH + s.wip_buffers.HBM_TSV) / 3));
+
+        rulEuv.push(s.equipments.PHOTO_EUV.rul);
+        rulEtch.push(s.equipments.ETCH.rul);
+        rulTsv.push(s.equipments.HBM_TSV.rul);
+
+        const tsv = s.equipments.HBM_TSV;
+        if (tsv.status === 'RUNNING') {
+          wafers += Math.round(125 * tsv.load_ratio * (s.kpi.eds_yield / 100));
+        }
+
+        Object.keys(stats).forEach(eqId => {
+          const eq = s.equipments[eqId];
+          const wip = s.wip_buffers[eqId] ?? 0;
+          stats[eqId].finalRul = eq.rul;
+          stats[eqId].finalTemp = eq.chamber_temp;
+
+          if (eq.status === 'MAINTENANCE') {
+            if (eq.maint_type === 'BM') stats[eqId].bm += 1;
+            else stats[eqId].pm += 1;
+          } else if (wip >= 80 || eq.feed_rate < 0.7) {
+            stats[eqId].wait += 1;
+          } else {
+            stats[eqId].work += 1;
+          }
+        });
+      });
+
+      document.getElementById('rep-kpi-wafers').innerText = `${wafers.toLocaleString()} Wafers`;
+      document.getElementById('rep-kpi-yield').innerText = `${(sumYield / count).toFixed(2)}%`;
+      document.getElementById('rep-kpi-energy').innerText = `${Math.round(sumPower * 0.5).toLocaleString()} kWh`;
+      document.getElementById('rep-kpi-cost').innerText = `$${Math.round(sumCost / count).toLocaleString()}`;
+
+      const tbody = document.getElementById('rep-table-body');
+      tbody.innerHTML = '';
+      const barWork = [], barWait = [], barPm = [], barBm = [];
+      let worstStation = '', worstScore = -1;
+
+      equipConfigs.forEach(cfg => {
+        const st = stats[cfg.id];
+        const pWork = Math.round((st.work / count) * 100);
+        const pWait = Math.round((st.wait / count) * 100);
+        const pPm   = Math.round((st.pm / count) * 100);
+        const pBm   = Math.max(0, 100 - pWork - pWait - pPm);
+
+        barWork.push(pWork); barWait.push(pWait); barPm.push(pPm); barBm.push(pBm);
+
+        const score = pWait + pBm * 2 + (100 - st.finalRul) * 0.3;
+        if (score > worstScore) { worstScore = score; worstStation = `${cfg.label} (${cfg.id})`; }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="fw-bold">${cfg.label}</td>
+          <td>
+            <div class="ps-stack-bar">
+              <div class="bg-success" style="width:${pWork}%"></div>
+              <div class="bg-warning" style="width:${pWait}%"></div>
+              <div class="bg-primary" style="width:${pPm}%"></div>
+              <div class="bg-danger" style="width:${pBm}%"></div>
+            </div>
+          </td>
+          <td class="text-success fw-bold">${pWork}%</td>
+          <td class="text-warning">${pWait}%</td>
+          <td>PM ${pPm}% / BM ${pBm}%</td>
+          <td class="fw-bold ${st.finalRul < 25 ? 'text-danger' : ''}">${st.finalRul.toFixed(1)}%</td>
+          <td>${st.finalTemp.toFixed(1)}°C</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('rep-diagnosis-box').innerHTML = `
+        <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>주요 병목/리스크 식별 설비:</strong> ${worstStation}<br/>
+        <strong>엔지니어링 권고:</strong> 총 ${count}틱 시뮬레이션 동안 양품 웨이퍼 ${wafers.toLocaleString()}매가 생산되었습니다. 최종 RUL이 25% 미만인 설비는 선제적 예방정비(PM) 스케줄링이 권장됩니다.
+      `;
+
+      ['yieldCost', 'rulTrend', 'powerWip', 'stationUtil'].forEach(k => { if (charts[k]) charts[k].destroy(); });
+
+      charts.yieldCost = new Chart(document.getElementById('chart-yield-cost'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'EDS 수율 (%)', data: yieldSeries, borderColor: '#10b981', yAxisID: 'y', tension: 0.3 },
+            { label: '단위 원가 ($)', data: costSeries, borderColor: '#38bdf8', yAxisID: 'y1', tension: 0.3 }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { position: 'left' }, y1: { position: 'right', grid: { drawOnChartArea: false } } } }
+      });
+
+      charts.rulTrend = new Chart(document.getElementById('chart-rul-trend'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'EUV 노광기', data: rulEuv, borderColor: '#3b82f6', tension: 0.25 },
+            { label: 'ETCH 식각', data: rulEtch, borderColor: '#f59e0b', tension: 0.25 },
+            { label: 'HBM TSV', data: rulTsv, borderColor: '#a855f7', tension: 0.25 }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } } }
+      });
+
+      charts.powerWip = new Chart(document.getElementById('chart-power-wip'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { type: 'line', label: '평균 WIP 적체율 (%)', data: avgWipSeries, borderColor: '#f43f5e', yAxisID: 'y1', tension: 0.3 },
+            { type: 'bar', label: '전력 소모량 (kW)', data: powerSeries, backgroundColor: 'rgba(6, 182, 212, 0.6)', yAxisID: 'y' }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { position: 'left' }, y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false } } } }
+      });
+
+      charts.stationUtil = new Chart(document.getElementById('chart-station-util'), {
+        type: 'bar',
+        data: {
+          labels: ['EUV 노광기', 'ETCH 식각', 'HBM TSV'],
+          datasets: [
+            { label: 'Working (%)', data: barWork, backgroundColor: '#10b981' },
+            { label: 'Blocked (%)', data: barWait, backgroundColor: '#f59e0b' },
+            { label: 'PM (%)', data: barPm, backgroundColor: '#3b82f6' },
+            { label: 'BM (%)', data: barBm, backgroundColor: '#ef4444' }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, max: 100 } } }
+      });
+    }
+
+    document.getElementById('btn-download-csv').addEventListener('click', () => {
+      const runEntry = simulationRunArchive.find(r => r.id === activeReportRunId) || simulationRunArchive[0];
+      const rows = [["Tick", "Yield(%)", "Power(kW)", "UnitCost($)", "EUV_RUL", "ETCH_RUL", "TSV_RUL"]];
+      runEntry.snapshots.forEach(s => {
+        rows.push([s.tick, s.kpi.eds_yield, s.kpi.power_kw, s.kpi.unit_cost, s.equipments.PHOTO_EUV.rul, s.equipments.ETCH.rul, s.equipments.HBM_TSV.rul]);
+      });
+      const csv = "\uFEFF" + rows.map(r => r.join(",")).join("\n");
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+      a.download = `M16_Fab_Simulation_${Date.now()}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+
+    document.getElementById('btn-download-html').addEventListener('click', () => {
+      const source = document.getElementById('page-reports');
+      const copy = source.cloneNode(true);
+      const charts = [...source.querySelectorAll('canvas')];
+      copy.querySelectorAll('canvas').forEach((canvas, index) => {
+        const image = document.createElement('img');
+        image.src = charts[index].toDataURL('image/png');
+        image.alt = `시뮬레이션 차트 ${index + 1}`;
+        image.style.maxWidth = '100%';
+        canvas.replaceWith(image);
+      });
+      copy.querySelectorAll('button, select').forEach(control => control.remove());
+      const content = copy.innerHTML;
+      const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>M16 Fab Report</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+        </head><body class="bg-dark text-light p-4">${content}</body></html>`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+      a.download = `M16_Fab_Report_${Date.now()}.html`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+
+    // ==========================================
+    // 7. ALARM & MAINTENANCE LOG TABLE
+    // ==========================================
+    function updateAlarmBadges() {
+      const unack = alarmLogs.filter(a => !a.ack).length;
+      document.getElementById('sidebar-alarm-badge').innerText = unack;
+      document.getElementById('top-notif-count').innerText = unack;
+    }
+
+    function renderAlarmTable() {
+      const filter = document.getElementById('alarm-filter-type').value;
+      const tbody = document.getElementById('alarm-table-body');
+      tbody.innerHTML = '';
+
+      alarmLogs
+        .filter(a => filter === 'ALL' || a.type === filter)
+        .forEach(item => {
+          const badgeClass = item.type === 'CRITICAL' ? 'bg-danger' : item.type === 'PM' ? 'bg-info text-dark' : 'bg-primary';
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="fw-bold">${item.id}</td>
+            <td>#${item.tick} (${item.time})</td>
+            <td><span class="badge bg-secondary">${item.station}</span></td>
+            <td><span class="badge ${badgeClass}">${item.type}</span></td>
+            <td>${item.desc}</td>
+            <td>${item.ack ? '<span class="badge bg-success">승인 완료</span>' : '<span class="badge bg-warning text-dark">미확인</span>'}</td>
+            <td>
+              <button class="btn btn-xs btn-outline-primary py-0 px-2" ${item.ack ? 'disabled' : ''} onclick="window.ackAlarm('${item.id}')">확인</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+    }
+
+    window.ackAlarm = function(id) {
+      const target = alarmLogs.find(a => a.id === id);
+      if (target) target.ack = true;
+      updateAlarmBadges();
+      renderAlarmTable();
+    };
+
+    document.getElementById('alarm-filter-type').addEventListener('change', renderAlarmTable);
+
+    // ==========================================
+    // 8. TIMELINE & RENDER LOOP
+    // ==========================================
+    const slider = document.getElementById('timeline-slider');
+    let playTimer = null;
+
+    function loadHistory(idx) {
+      historyIdx = idx;
+      slider.value = idx;
+      document.getElementById('timeline-label').innerText = `${idx + 1} / ${MOCK_HISTORY.length}`;
+      sandboxState = JSON.parse(JSON.stringify(MOCK_HISTORY[idx]));
+      syncVisuals(false);
+    }
+
+    slider.addEventListener('input', e => loadHistory(Number(e.target.value)));
+    document.getElementById('btn-prev').addEventListener('click', () => loadHistory(Math.max(0, historyIdx - 1)));
+    document.getElementById('btn-next').addEventListener('click', () => loadHistory(Math.min(MOCK_HISTORY.length - 1, historyIdx + 1)));
+    document.getElementById('btn-play').addEventListener('click', () => {
+      const btn = document.getElementById('btn-play');
+      if (playTimer) {
+        clearInterval(playTimer);
+        playTimer = null;
+        btn.innerHTML = '<i class="bi bi-play-fill"></i>';
+      } else {
+        btn.innerHTML = '<i class="bi bi-pause-fill"></i>';
+        playTimer = setInterval(() => loadHistory((historyIdx + 1) % MOCK_HISTORY.length), 1800);
+      }
+    });
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+      controls.update();
+
+      selectionRing.scale.setScalar(1.0 + Math.sin(t * 4.0) * 0.04);
+      ohtCarriers.forEach(c => {
+        const p = (t * 0.18 + c.userData.offset) % 1.0;
+        c.position.x = -8.5 + p * 17.0;
+      });
+
+      if (document.getElementById('page-3d-control').classList.contains('active')) {
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(interactiveObjects, false);
+        if (hits.length > 0) {
+          const eqId = hits[0].object.userData.equipId;
+          const st = sandboxState.equipments[eqId];
+          const cfg = equipConfigs.find(c => c.id === eqId);
+          document.getElementById('tt-title').innerText = cfg.label;
+          document.getElementById('tt-state').innerText = st.status;
+          document.getElementById('tt-rul').innerText = `${st.rul.toFixed(1)}%`;
+          document.getElementById('tt-temp').innerText = `${st.chamber_temp.toFixed(1)}°C`;
+          document.getElementById('tt-load').innerText = `${Math.round(st.load_ratio * 100)}%`;
+          document.getElementById('tt-feed').innerText = `${st.feed_rate.toFixed(1)}x`;
+          tooltip.classList.add('visible');
+          document.body.style.cursor = 'pointer';
+        } else {
+          tooltip.classList.remove('visible');
+          document.body.style.cursor = 'default';
+        }
+        renderer.render(scene, camera);
+      }
+    }
+
+    loadHistory(2);
+    updateAlarmBadges();
+    animate();
+  </script>
+</body>
+</html>

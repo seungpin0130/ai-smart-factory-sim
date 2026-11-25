@@ -1,0 +1,1850 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SK hynix M16 Fab - Enterprise Digital Twin & MES Portal v5.0</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-base: #060a12;
+      --bg-surface: #0c1322;
+      --bg-elevated: #111b2e;
+      --panel-glass: rgba(12, 19, 34, 0.86);
+      --border-subtle: rgba(71, 114, 184, 0.26);
+      --border-active: rgba(56, 189, 248, 0.55);
+      --text-primary: #f1f5f9;
+      --text-secondary: #8ea4c8;
+      --text-muted: #5b7094;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-indigo: #6366f1;
+      --status-ok: #10b981;
+      --status-warn: #f59e0b;
+      --status-crit: #ef4444;
+      --nav-height: 58px;
+      --sidebar-width: 68px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* =========================================
+       VIEW 1: ENTERPRISE LOGIN PAGE
+       ========================================= */
+    #view-login {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: radial-gradient(circle at 20% 20%, #101e3b 0%, #060a12 65%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    #view-login.hidden {
+      display: none;
+    }
+
+    .login-grid-bg {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(rgba(59, 130, 246, 0.06) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(59, 130, 246, 0.06) 1px, transparent 1px);
+      background-size: 42px 42px;
+      pointer-events: none;
+    }
+
+    .login-card {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+      background: rgba(13, 21, 38, 0.92);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(96, 165, 250, 0.35);
+      border-radius: 18px;
+      padding: 36px 34px;
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.72);
+    }
+
+    .login-logo-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .sk-badge {
+      background: linear-gradient(135deg, #ef4444, #f97316);
+      color: #fff;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 4px 9px;
+      border-radius: 6px;
+      letter-spacing: 0.6px;
+    }
+
+    .login-card h1 {
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+      margin-bottom: 6px;
+    }
+
+    .login-card p.sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .form-field {
+      margin-bottom: 16px;
+    }
+
+    .form-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .form-input, .form-select {
+      width: 100%;
+      background: rgba(7, 12, 24, 0.85);
+      border: 1px solid rgba(100, 140, 210, 0.3);
+      color: var(--text-primary);
+      font-size: 13.5px;
+      padding: 11px 14px;
+      border-radius: 10px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .form-input:focus, .form-select:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    .btn-login-submit {
+      width: 100%;
+      margin-top: 8px;
+      background: linear-gradient(135deg, #2563eb, #06b6d4);
+      border: none;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(37, 99, 235, 0.38);
+      transition: transform 0.12s, opacity 0.15s;
+    }
+
+    .btn-login-submit:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
+    }
+
+    .login-demo-hint {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 11.5px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* =========================================
+       APP SHELL (TOP BAR + LEFT RAIL)
+       ========================================= */
+    #app-shell {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    #app-shell.active {
+      display: flex;
+    }
+
+    #global-topbar {
+      height: var(--nav-height);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 30;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .topbar-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .topbar-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding-left: 12px;
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 5px 12px;
+      border-radius: 99px;
+      font-size: 12px;
+    }
+
+    .user-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--status-ok);
+    }
+
+    .btn-logout {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 6px 11px;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+    .btn-logout:hover { background: rgba(239, 68, 68, 0.28); }
+
+    #workspace-body {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Left Navigation Rail */
+    #left-nav-rail {
+      width: var(--sidebar-width);
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 12px;
+      z-index: 25;
+    }
+
+    .nav-rail-btn {
+      width: 48px;
+      height: 52px;
+      border-radius: 12px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .nav-rail-btn span.ico { font-size: 17px; }
+    .nav-rail-btn span.lbl { font-size: 10px; font-weight: 600; }
+
+    .nav-rail-btn:hover {
+      background: rgba(59, 130, 246, 0.14);
+      color: #fff;
+    }
+
+    .nav-rail-btn.active {
+      background: rgba(59, 130, 246, 0.24);
+      border-color: var(--accent-blue);
+      color: #38bdf8;
+    }
+
+    /* Page Containers */
+    .page-view {
+      flex: 1;
+      position: relative;
+      display: none;
+      overflow: hidden;
+    }
+
+    .page-view.active {
+      display: block;
+    }
+
+    /* =========================================
+       VIEW 2: 3D MONITORING & CONTROL PAGE
+       ========================================= */
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    .glass-card {
+      background: var(--panel-glass);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 13px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    /* Top KPI Strip inside 3D Monitor */
+    #monitor-kpi-bar {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      right: 16px;
+      z-index: 10;
+      padding: 10px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .mode-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.18);
+      color: var(--status-ok);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .mode-pill.sandbox {
+      background: rgba(139, 92, 246, 0.25);
+      color: #c4b5fd;
+      border-color: rgba(139, 92, 246, 0.55);
+    }
+
+    .kpi-strip-items {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .kpi-box {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .kpi-box span { font-size: 10px; color: var(--text-secondary); }
+    .kpi-box strong { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* Left Equipment Inspector Drawer */
+    #station-inspector-drawer {
+      position: absolute;
+      top: 76px;
+      left: 16px;
+      bottom: 88px;
+      width: 315px;
+      z-index: 10;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      overflow-y: auto;
+    }
+
+    .sec-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 7px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .sec-head h3 { font-size: 13px; font-weight: 700; color: #e2e8f0; }
+
+    .btn-xs {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-secondary);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .btn-xs:hover { color: #fff; background: rgba(59, 130, 246, 0.35); }
+
+    .station-selector {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .st-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 4px;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+    .st-btn.active {
+      background: rgba(59, 130, 246, 0.28);
+      border-color: var(--accent-blue);
+      color: #fff;
+    }
+
+    .param-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .param-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+    .param-label strong { color: var(--accent-cyan); }
+
+    input[type="range"].ctrl-slider {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 99px;
+      outline: none;
+    }
+    input[type="range"].ctrl-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      border: 2px solid #fff;
+      cursor: pointer;
+    }
+
+    .btn-full {
+      width: 100%;
+      border: none;
+      border-radius: 8px;
+      padding: 9px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-primary-blue { background: var(--accent-blue); color: #fff; }
+    .btn-run-green {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.32);
+    }
+
+    .two-col-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .btn-pm { background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); color: #6ee7b7; border-radius: 8px; padding: 7px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+    .btn-bm { background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #fca5a5; border-radius: 8px; padding: 7px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+
+    .batch-exec-box {
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Right AI Council Drawer */
+    #ai-council-drawer {
+      position: absolute;
+      top: 76px;
+      right: 16px;
+      bottom: 88px;
+      width: 330px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .drawer-top {
+      padding: 12px 15px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .drawer-top h3 { font-size: 13px; font-weight: 700; }
+
+    #debate-feed {
+      flex: 1;
+      padding: 12px 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .msg-card {
+      padding: 9px 11px;
+      border-radius: 9px;
+      font-size: 11.5px;
+      line-height: 1.48;
+      background: rgba(255, 255, 255, 0.04);
+      border-left: 3px solid #10a37f;
+    }
+    .msg-card.gemini { border-left-color: #6366f1; }
+    .msg-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      font-weight: 700;
+      margin-bottom: 3px;
+      color: #34d399;
+    }
+    .msg-card.gemini .msg-head { color: #a5b4fc; }
+
+    .action-footer {
+      padding: 10px 14px;
+      background: rgba(6, 182, 212, 0.1);
+      border-top: 1px solid var(--border-subtle);
+      font-size: 11px;
+    }
+    .action-footer pre {
+      font-family: monospace;
+      color: #cffafe;
+      margin-top: 4px;
+      white-space: pre-wrap;
+    }
+
+    /* Bottom Timeline Dock */
+    #bottom-timeline {
+      position: absolute;
+      bottom: 14px;
+      left: 16px;
+      right: 16px;
+      z-index: 10;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .play-btns { display: flex; gap: 6px; }
+    .ico-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #fff;
+      cursor: pointer;
+    }
+    .ico-btn.play { background: var(--accent-blue); border-color: var(--accent-blue); }
+
+    /* Hover Tooltip */
+    #hover-tooltip {
+      position: fixed;
+      z-index: 50;
+      width: 240px;
+      padding: 12px 14px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+    #hover-tooltip.visible { opacity: 1; }
+
+    /* =========================================
+       VIEW 3: ANALYTICS & PLANT SIMULATION REPORT PAGE
+       ========================================= */
+    #view-reports {
+      background: var(--bg-base);
+      overflow-y: auto;
+      padding: 24px 28px 48px;
+    }
+
+    .report-page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 22px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .report-page-header h2 {
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .report-page-header p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .rep-toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .rep-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .rep-stat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+    .rep-stat-card span {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .rep-stat-card strong {
+      display: block;
+      font-size: 24px;
+      font-weight: 800;
+      margin-top: 6px;
+      color: #38bdf8;
+    }
+
+    /* Charts Grid */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .chart-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 13px;
+      padding: 18px 20px;
+    }
+
+    .chart-panel h3 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .chart-canvas-wrap {
+      position: relative;
+      height: 230px;
+      width: 100%;
+    }
+
+    /* Plant Simulation Table */
+    .ps-report-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 13px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .ps-report-panel h3 {
+      font-size: 14.5px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      padding-left: 10px;
+      border-left: 3px solid var(--accent-cyan);
+    }
+
+    table.mes-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    table.mes-table th, table.mes-table td {
+      padding: 11px 14px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    table.mes-table th {
+      background: rgba(30, 58, 138, 0.28);
+      color: #bfdbfe;
+      font-weight: 700;
+    }
+
+    .stacked-bar {
+      display: flex;
+      width: 100%;
+      height: 14px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #1e293b;
+    }
+    .sb-work { background: #10b981; }
+    .sb-wait { background: #f59e0b; }
+    .sb-pm   { background: #3b82f6; }
+    .sb-fail { background: #ef4444; }
+
+    .diagnosis-box {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #fde68a;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =====================================================
+       PAGE 1: ENTERPRISE LOGIN SCREEN
+       ===================================================== -->
+  <section id="view-login">
+    <div class="login-grid-bg"></div>
+    <div class="login-card">
+      <div class="login-logo-row">
+        <span class="sk-badge">SK hynix</span>
+        <span style="font-size: 12px; color: #93c5fd; font-weight: 700;">M16 FAB DIGITAL TWIN</span>
+      </div>
+      <h1>스마트 팩토리 통합 관제 로그인</h1>
+      <p class="sub">공정 시뮬레이션, 3D 설비 실시간 파라미터 제어 및 Plant Simulation 분석 리포트 포털에 접속합니다.</p>
+
+      <form id="login-form">
+        <p class="small">로컬 시연 로그인입니다. 실제 비밀번호를 입력하지 마세요.</p>
+        <div class="form-field">
+          <label for="login-emp-id">사번 / 엔지니어 ID</label>
+          <input type="text" id="login-emp-id" class="form-input" value="M16-ENG-2048" required />
+        </div>
+
+        <div class="form-field">
+          <label for="login-pw">비밀번호 (SSO 인증)</label>
+          <input type="password" id="login-pw" autocomplete="off" aria-label="모의 비밀번호" class="form-input" value="••••••••••••" required />
+        </div>
+
+        <div class="form-field">
+          <label for="login-role">접속 직무 권한 (Role)</label>
+          <select id="login-role" class="form-select">
+            <option value="공정기술 엔지니어 (Process Eng)">공정기술 엔지니어 (Process Eng)</option>
+            <option value="설비보전 파트장 (Equipment Maint)">설비보전 파트장 (Equipment Maint)</option>
+            <option value="Fab 생산관리 총괄 (Fab Manager)">Fab 생산관리 총괄 (Fab Manager)</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn-login-submit">시스템 로그인 →</button>
+      </form>
+
+      <div class="login-demo-hint">
+        <span>보안 등급: L3 Fab Control</span>
+        <span>v5.0 Multi-View MES</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- =====================================================
+       AUTHENTICATED APPLICATION SHELL
+       ===================================================== -->
+  <div id="app-shell">
+    <!-- Top Global Bar -->
+    <header id="global-topbar">
+      <div class="topbar-left">
+        <span class="sk-badge">M16 FAB</span>
+        <span class="topbar-title">SK hynix M16 3D 디지털 트윈 통합 관제 시스템</span>
+        <span id="current-page-breadcrumb" class="topbar-sub">3D 실시간 모니터링 및 설비 제어</span>
+      </div>
+
+      <div class="topbar-right">
+        <div class="user-chip">
+          <span class="user-dot"></span>
+          <strong id="display-user-id">M16-ENG-2048</strong>
+          <span style="color: var(--text-secondary);">|</span>
+          <span id="display-user-role" style="color: #93c5fd;">공정기술 엔지니어</span>
+        </div>
+        <button id="btn-logout" class="btn-logout">로그아웃</button>
+      </div>
+    </header>
+
+    <div id="workspace-body">
+      <!-- Left Navigation Rail -->
+      <nav id="left-nav-rail">
+        <button class="nav-rail-btn active" data-target="view-monitor" title="3D 모니터링 및 제어">
+          <span class="ico">🏭</span>
+          <span class="lbl">3D 관제</span>
+        </button>
+        <button class="nav-rail-btn" data-target="view-reports" title="시뮬레이션 리포트 및 트렌드 그래프">
+          <span class="ico">📊</span>
+          <span class="lbl">리포트</span>
+        </button>
+      </nav>
+
+      <!-- =====================================================
+           PAGE 2: 3D MONITORING & EQUIPMENT CONTROL VIEW
+           ===================================================== -->
+      <main id="view-monitor" class="page-view active">
+        <div id="canvas-container"></div>
+
+        <!-- Floating Top KPI Strip -->
+        <div id="monitor-kpi-bar" class="glass-card">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span id="mode-badge" class="mode-pill">HISTORY REPLAY</span>
+            <span id="hud-clock" style="font-size: 12px; color: var(--text-secondary);">Tick #103</span>
+          </div>
+
+          <div class="kpi-strip-items">
+            <div class="kpi-box">
+              <span>EDS 수율 (Yield)</span>
+              <strong id="kpi-yield" style="color: var(--status-ok);">98.48%</strong>
+            </div>
+            <div class="kpi-box">
+              <span>OHT 반송 지연</span>
+              <strong id="kpi-oht">62.5s</strong>
+            </div>
+            <div class="kpi-box">
+              <span>실시간 전력</span>
+              <strong id="kpi-power">1,210 kW</strong>
+            </div>
+            <div class="kpi-box">
+              <span>웨이퍼 원가</span>
+              <strong id="kpi-cost">$1,160</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Left Drawer: Per-Station Click Inspector -->
+        <aside id="station-inspector-drawer" class="glass-card">
+          <div class="sec-head">
+            <h3>설비 개별 설정 (3D 클릭 선택)</h3>
+            <button id="btn-reset-history" class="btn-xs">이력 복귀</button>
+          </div>
+
+          <div class="station-selector">
+            <button class="st-btn active" data-station="PHOTO_EUV">EUV 노광</button>
+            <button class="st-btn" data-station="ETCH">ETCH 식각</button>
+            <button class="st-btn" data-station="HBM_TSV">HBM TSV</button>
+          </div>
+
+          <div class="param-row">
+            <div class="param-label">
+              <span>투입 속도 배율 (Feed Rate)</span>
+              <strong id="val-feed">1.0x</strong>
+            </div>
+            <input type="range" id="inp-feed" class="ctrl-slider" min="0.2" max="1.5" step="0.1" value="1.0" />
+          </div>
+
+          <div class="param-row">
+            <div class="param-label">
+              <span>목표 가동 부하율 (Load Ratio)</span>
+              <strong id="val-load">80%</strong>
+            </div>
+            <input type="range" id="inp-load" class="ctrl-slider" min="30" max="100" step="5" value="80" />
+          </div>
+
+          <div class="param-row">
+            <div class="param-label">
+              <span>챔버 설정 온도 (Temp)</span>
+              <strong id="val-temp">65.0°C</strong>
+            </div>
+            <input type="range" id="inp-temp" class="ctrl-slider" min="20" max="90" step="1" value="65" />
+          </div>
+
+          <div class="param-row">
+            <div class="param-label">
+              <span>잔여 유효 수명 (RUL 설정)</span>
+              <strong id="val-rul">85%</strong>
+            </div>
+            <input type="range" id="inp-rul" class="ctrl-slider" min="5" max="100" step="5" value="85" />
+          </div>
+
+          <button id="btn-apply-params" class="btn-full btn-primary-blue">✓ 선택 설비 설정값 즉시 반영</button>
+
+          <div class="two-col-btns">
+            <button id="btn-exec-pm" class="btn-pm">🔧 예방정비(PM)</button>
+            <button id="btn-exec-bm" class="btn-bm">⚡ 돌발고장(BM)</button>
+          </div>
+
+          <div class="batch-exec-box">
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-secondary);">
+              <span>연속 시뮬레이션 실행</span>
+              <span id="oht-summary-mini" style="color: var(--accent-cyan);">OHT 22대 가동</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <select id="sel-batch-ticks" class="form-select" style="padding: 7px 10px; font-size: 12px; width: 46%;">
+                <option value="6">6 틱 (3시간)</option>
+                <option value="12" selected>12 틱 (6시간)</option>
+                <option value="24">24 틱 (12시간)</option>
+                <option value="48">48 틱 (24시간)</option>
+              </select>
+              <button id="btn-run-sim" class="btn-full btn-run-green" style="width: 54%;">▶ 완료 후 리포트</button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Right Drawer: Dual AI Decision Council -->
+        <aside id="ai-council-drawer" class="glass-card">
+          <div class="drawer-top">
+            <h3>듀얼 AI 의사결정 위원회</h3>
+            <span id="ai-badge" style="font-size: 10.5px; color: var(--text-secondary);">모니터링 중</span>
+          </div>
+          <div id="debate-feed"></div>
+          <div class="action-footer">
+            <strong style="color: var(--accent-cyan);">최종 합의 제어 액션</strong>
+            <pre id="ai-action-json">대기 중 (이상 징후 없음)</pre>
+          </div>
+        </aside>
+
+        <!-- Bottom Timeline Replay Bar -->
+        <footer id="bottom-timeline" class="glass-card">
+          <div class="play-btns">
+            <button id="btn-prev" class="ico-btn">◀</button>
+            <button id="btn-play" class="ico-btn play">▶</button>
+            <button id="btn-next" class="ico-btn">▶|</button>
+          </div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-secondary);">
+              <span>타임라인 리플레이 (3D 설비 클릭 시 개별 파라미터 편집 가능)</span>
+              <strong id="timeline-label" style="color: #fff;">3 / 3</strong>
+            </div>
+            <input type="range" id="timeline-slider" class="ctrl-slider" min="0" max="2" value="2" />
+          </div>
+        </footer>
+      </main>
+
+      <!-- =====================================================
+           PAGE 3: ANALYTICS & PLANT SIMULATION REPORT VIEW
+           ===================================================== -->
+      <section id="view-reports" class="page-view">
+        <div class="report-page-header">
+          <div>
+            <h2>시뮬레이션 완료 분석 리포트 & 공정 트렌드 대시보드</h2>
+            <p id="rep-page-subtitle">최근 실행 구간: Tick #101 ~ #103 (기본 이력 데이터)</p>
+          </div>
+
+          <div class="rep-toolbar">
+            <select id="rep-run-selector" class="form-select" style="padding: 8px 12px; font-size: 12.5px; width: 250px;">
+              <option value="latest">최신 시뮬레이션 실행 결과</option>
+            </select>
+            <button id="btn-download-html" class="btn-full btn-primary-blue" style="width: auto; padding: 9px 16px;">⬇ 리포트 HTML 저장</button>
+          </div>
+        </div>
+
+        <!-- 4 Summary KPI Cards -->
+        <div class="rep-kpi-grid">
+          <div class="rep-stat-card">
+            <span>총 생산 완료 웨이퍼 (Throughput)</span>
+            <strong id="rep-kpi-wafers">375 Wafers</strong>
+          </div>
+          <div class="rep-stat-card">
+            <span>평균 EDS 수율 (Mean Yield)</span>
+            <strong id="rep-kpi-yield" style="color: var(--status-ok);">98.34%</strong>
+          </div>
+          <div class="rep-stat-card">
+            <span>누적 전력 소모량 (Total Energy)</span>
+            <strong id="rep-kpi-energy" style="color: var(--status-warn);">2,090 kWh</strong>
+          </div>
+          <div class="rep-stat-card">
+            <span>평균 웨이퍼 단위 원가</span>
+            <strong id="rep-kpi-cost">$1,192</strong>
+          </div>
+        </div>
+
+        <!-- Interactive Time-Series Charts (Chart.js) -->
+        <div class="charts-grid">
+          <div class="chart-panel">
+            <h3>
+              <span>📈 EDS 수율(%) 및 웨이퍼 단위 원가($) 추이</span>
+              <span style="font-size: 11px; color: var(--text-secondary);">Tick별 시계열</span>
+            </h3>
+            <div class="chart-canvas-wrap">
+              <canvas id="chart-yield-cost"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-panel">
+            <h3>
+              <span>🔋 설비별 잔여 유효 수명 (RUL %) 변화 추이</span>
+              <span style="font-size: 11px; color: var(--text-secondary);">EUV / ETCH / TSV</span>
+            </h3>
+            <div class="chart-canvas-wrap">
+              <canvas id="chart-rul-trend"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-panel">
+            <h3>
+              <span>⚡ 실시간 전력 소모량(kW) 및 WIP 버퍼 적체율(%)</span>
+              <span style="font-size: 11px; color: var(--text-secondary);">에너지·병목 상관관계</span>
+            </h3>
+            <div class="chart-canvas-wrap">
+              <canvas id="chart-power-wip"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-panel">
+            <h3>
+              <span>📊 설비별 가동 상태 점유율 비교 (Plant Simulation Standard)</span>
+              <span style="font-size: 11px; color: var(--text-secondary);">Working / Blocked / PM / BM</span>
+            </h3>
+            <div class="chart-canvas-wrap">
+              <canvas id="chart-station-util"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Plant Simulation Station Utilization Table -->
+        <div class="ps-report-panel">
+          <h3>설비별 상세 가동 통계표 (Station Utilization & Bottleneck Table)</h3>
+          <table class="mes-table">
+            <thead>
+              <tr>
+                <th>설비명 (Station)</th>
+                <th style="width: 32%;">상태 점유율 바 (Working / Blocked / PM / Failed)</th>
+                <th>정상 가동률</th>
+                <th>병목/감속</th>
+                <th>정비(PM/BM)</th>
+                <th>최종 RUL</th>
+                <th>최종 온도</th>
+              </tr>
+            </thead>
+            <tbody id="rep-table-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Bottleneck Diagnosis Callout -->
+        <div id="rep-diagnosis-box" class="diagnosis-box"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Floating Tooltip for 3D Hover -->
+  <div id="hover-tooltip" class="glass-card">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+      <strong id="tt-title" style="font-size: 13px;">EUV 노광기</strong>
+      <span id="tt-state" style="font-size: 10.5px; color: var(--status-ok); font-weight: 700;">RUNNING</span>
+    </div>
+    <div style="font-size: 11.5px; color: var(--text-secondary); display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+      <div>RUL: <strong id="tt-rul" style="color: #fff;">88.0%</strong></div>
+      <div>온도: <strong id="tt-temp" style="color: #fff;">22.1°C</strong></div>
+      <div>부하율: <strong id="tt-load" style="color: #fff;">78%</strong></div>
+      <div>Feed: <strong id="tt-feed" style="color: #fff;">1.0x</strong></div>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ==========================================
+    // 1. MULTI-PAGE NAVIGATION & AUTH LOGIC
+    // ==========================================
+    const viewLogin = document.getElementById('view-login');
+    const appShell = document.getElementById('app-shell');
+
+    function switchPage(pageId) {
+      document.querySelectorAll('.page-view').forEach(v => v.classList.remove('active'));
+      document.getElementById(pageId).classList.add('active');
+
+      document.querySelectorAll('.nav-rail-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.target === pageId);
+      });
+
+      const crumb = document.getElementById('current-page-breadcrumb');
+      if (pageId === 'view-monitor') {
+        crumb.innerText = '3D 실시간 모니터링 및 설비 제어';
+        handleResize();
+      } else if (pageId === 'view-reports') {
+        crumb.innerText = 'Plant Simulation 완료 리포트 및 트렌드 분석';
+        renderReportDashboard();
+      }
+    }
+
+    document.getElementById('login-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const empId = document.getElementById('login-emp-id').value.trim() || 'M16-ENG-2048';
+      const role = document.getElementById('login-role').value;
+
+      document.getElementById('display-user-id').innerText = empId;
+      document.getElementById('display-user-role').innerText = role.split(' (')[0];
+
+      viewLogin.classList.add('hidden');
+      appShell.classList.add('active');
+      handleResize();
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', () => {
+      appShell.classList.remove('active');
+      viewLogin.classList.remove('hidden');
+    });
+
+    document.querySelectorAll('.nav-rail-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchPage(btn.dataset.target));
+    });
+
+    // ==========================================
+    // 2. INITIAL MOCK DATA & STATE
+    // ==========================================
+    const MOCK_HISTORY = [
+      {
+        tick: 101,
+        timestamp: "2026-11-25 13:30",
+        kpi: { eds_yield: 98.65, power_kw: 1390, unit_cost: 1170 },
+        wip_buffers: { PHOTO_EUV: 45, ETCH: 52, HBM_TSV: 40 },
+        equipments: {
+          PHOTO_EUV: { status: "RUNNING", rul: 88.0, chamber_temp: 22.1, load_ratio: 0.78, feed_rate: 1.0 },
+          ETCH:      { status: "RUNNING", rul: 61.5, chamber_temp: 65.0, load_ratio: 0.85, feed_rate: 1.0 },
+          HBM_TSV:   { status: "RUNNING", rul: 91.2, chamber_temp: 41.0, load_ratio: 0.72, feed_rate: 1.0 }
+        },
+        trigger_reason: null,
+        debate: null,
+        final_action: null
+      },
+      {
+        tick: 102,
+        timestamp: "2026-11-25 14:00",
+        kpi: { eds_yield: 97.90, power_kw: 1580, unit_cost: 1245 },
+        wip_buffers: { PHOTO_EUV: 62, ETCH: 86, HBM_TSV: 78 },
+        equipments: {
+          PHOTO_EUV: { status: "RUNNING", rul: 84.2, chamber_temp: 22.4, load_ratio: 0.82, feed_rate: 0.4 },
+          ETCH:      { status: "RUNNING", rul: 18.4, chamber_temp: 74.8, load_ratio: 0.96, feed_rate: 1.0 },
+          HBM_TSV:   { status: "RUNNING", rul: 87.0, chamber_temp: 44.5, load_ratio: 0.88, feed_rate: 1.0 }
+        },
+        trigger_reason: "RUL_CRITICAL:ETCH (18.4%)",
+        debate: [
+          { speaker: "ChatGPT (생산기술)", turn: 1, text: "ETCH 챔버 RUL이 18.4%까지 하락했습니다. 상류 EUV 투입 속도를 40%로 감속하여 버퍼 과부하를 억제해야 합니다." },
+          { speaker: "Gemini (설비·원가)", turn: 2, text: "챔버 온도가 74.8°C로 상승했습니다. 돌발 고장(BM) 방지 및 비용 절감을 위해 즉시 예방 정비(PM)를 승인합니다." }
+        ],
+        final_action: { PHOTO_EUV_feed_rate: 0.4, ETCH_action: "SCHEDULE_PM_NOW" }
+      },
+      {
+        tick: 103,
+        timestamp: "2026-11-25 14:30",
+        kpi: { eds_yield: 98.48, power_kw: 1210, unit_cost: 1160 },
+        wip_buffers: { PHOTO_EUV: 48, ETCH: 35, HBM_TSV: 50 },
+        equipments: {
+          PHOTO_EUV: { status: "RUNNING", rul: 82.5, chamber_temp: 22.0, load_ratio: 0.65, feed_rate: 1.0 },
+          ETCH:      { status: "MAINTENANCE", maint_type: "PM", rul: 100.0, chamber_temp: 30.0, load_ratio: 0.0, feed_rate: 0.0 },
+          HBM_TSV:   { status: "RUNNING", rul: 84.1, chamber_temp: 41.2, load_ratio: 0.75, feed_rate: 1.0 }
+        },
+        trigger_reason: "PM_EXECUTED:ETCH",
+        debate: null,
+        final_action: { status: "PM 완료 및 정상 라인 밸런싱 복귀" }
+      }
+    ];
+
+    const equipConfigs = [
+      { id: 'PHOTO_EUV', label: 'EUV 노광기 #01', x: -7, size: [4.2, 3.2, 3.6], optTemp: 22.0 },
+      { id: 'ETCH',      label: '식각 챔버 #02',  x: 0,  size: [3.8, 2.8, 3.4], optTemp: 64.0 },
+      { id: 'HBM_TSV',   label: 'HBM TSV 적층기', x: 7,  size: [4.0, 3.4, 3.6], optTemp: 42.0 }
+    ];
+
+    let historyIdx = 2;
+    let selectedStationId = 'PHOTO_EUV';
+    let sandboxState = JSON.parse(JSON.stringify(MOCK_HISTORY[2]));
+    let simulationRunArchive = [
+      { id: "default", name: "기본 리플레이 이력 (Tick #101 ~ #103)", snapshots: JSON.parse(JSON.stringify(MOCK_HISTORY)) }
+    ];
+    let activeReportRunId = "default";
+
+    // ==========================================
+    // 3. THREE.JS 3D SCENE SETUP
+    // ==========================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060a12);
+    scene.fog = new THREE.FogExp2(0x060a12, 0.02);
+
+    const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 1000);
+    camera.position.set(0, 14, 21);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2.1;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const dirLight = new THREE.DirectionalLight(0x93c5fd, 1.4);
+    dirLight.position.set(10, 20, 12);
+    scene.add(dirLight);
+    scene.add(new THREE.GridHelper(36, 36, 0x1e3a8a, 0x111c33));
+
+    const fabMeshes = {};
+    const interactiveObjects = [];
+
+    equipConfigs.forEach(cfg => {
+      const geo = new THREE.BoxGeometry(...cfg.size);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        roughness: 0.35,
+        metalness: 0.65,
+        emissive: 0x10b981,
+        emissiveIntensity: 0.3
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(cfg.x, cfg.size[1] / 2, 0);
+      mesh.userData = { equipId: cfg.id, label: cfg.label };
+
+      const edges = new THREE.EdgesGeometry(geo);
+      mesh.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.45 })));
+
+      scene.add(mesh);
+      fabMeshes[cfg.id] = mesh;
+      interactiveObjects.push(mesh);
+    });
+
+    const selectionRing = new THREE.Mesh(
+      new THREE.RingGeometry(2.5, 2.85, 32),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide })
+    );
+    selectionRing.rotation.x = -Math.PI / 2;
+    selectionRing.position.set(-7, 0.05, 0);
+    scene.add(selectionRing);
+
+    const ohtTrack = new THREE.Mesh(
+      new THREE.BoxGeometry(18, 0.14, 0.65),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.45 })
+    );
+    ohtTrack.position.set(0, 4.5, 0);
+    scene.add(ohtTrack);
+
+    const ohtCarriers = [];
+    for (let i = 0; i < 6; i++) {
+      const carrier = new THREE.Mesh(
+        new THREE.BoxGeometry(0.65, 0.45, 0.55),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, emissive: 0x38bdf8, emissiveIntensity: 0.6 })
+      );
+      carrier.position.set(-8 + i * 3.0, 4.2, 0);
+      carrier.userData = { offset: i / 6 };
+      scene.add(carrier);
+      ohtCarriers.push(carrier);
+    }
+
+    function handleResize() {
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      camera.aspect = rect.width / rect.height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(rect.width, rect.height);
+    }
+    window.addEventListener('resize', handleResize);
+
+    // ==========================================
+    // 4. 3D CLICK SELECTION & PARAMETER INSPECTOR
+    // ==========================================
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const tooltip = document.getElementById('hover-tooltip');
+    let pointerDown = { x: 0, y: 0 };
+
+    renderer.domElement.addEventListener('mousemove', (e) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      tooltip.style.left = `${Math.min(e.clientX + 14, window.innerWidth - 255)}px`;
+      tooltip.style.top = `${Math.min(e.clientY + 14, window.innerHeight - 130)}px`;
+    });
+
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      pointerDown = { x: e.clientX, y: e.clientY };
+    });
+
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (Math.hypot(e.clientX - pointerDown.x, e.clientY - pointerDown.y) > 6) return;
+      const bounds = renderer.domElement.getBoundingClientRect();
+      const pointer = new THREE.Vector2(
+        ((e.clientX - bounds.left) / bounds.width) * 2 - 1,
+        1 - ((e.clientY - bounds.top) / bounds.height) * 2
+      );
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(interactiveObjects, false);
+      if (hits.length > 0) {
+        selectStation(hits[0].object.userData.equipId);
+      }
+    });
+
+    function selectStation(eqId) {
+      selectedStationId = eqId;
+      const cfg = equipConfigs.find(c => c.id === eqId);
+      if (cfg) selectionRing.position.x = cfg.x;
+
+      document.querySelectorAll('.st-btn').forEach(b => b.classList.toggle('active', b.dataset.station === eqId));
+
+      const st = sandboxState.equipments[eqId];
+      if (!st) return;
+
+      document.getElementById('inp-feed').value = st.feed_rate;
+      document.getElementById('val-feed').innerText = `${st.feed_rate.toFixed(1)}x`;
+
+      const loadPct = Math.round(st.load_ratio * 100);
+      document.getElementById('inp-load').value = loadPct;
+      document.getElementById('val-load').innerText = `${loadPct}%`;
+
+      document.getElementById('inp-temp').value = Math.round(st.chamber_temp);
+      document.getElementById('val-temp').innerText = `${st.chamber_temp.toFixed(1)}°C`;
+
+      document.getElementById('inp-rul').value = Math.round(st.rul);
+      document.getElementById('val-rul').innerText = `${Math.round(st.rul)}%`;
+    }
+
+    document.querySelectorAll('.st-btn').forEach(btn => {
+      btn.addEventListener('click', () => selectStation(btn.dataset.station));
+    });
+
+    document.getElementById('inp-feed').addEventListener('input', e => document.getElementById('val-feed').innerText = `${Number(e.target.value).toFixed(1)}x`);
+    document.getElementById('inp-load').addEventListener('input', e => document.getElementById('val-load').innerText = `${e.target.value}%`);
+    document.getElementById('inp-temp').addEventListener('input', e => document.getElementById('val-temp').innerText = `${Number(e.target.value).toFixed(1)}°C`);
+    document.getElementById('inp-rul').addEventListener('input', e => document.getElementById('val-rul').innerText = `${e.target.value}%`);
+
+    function syncVisuals(isCustom) {
+      const badge = document.getElementById('mode-badge');
+      badge.innerText = isCustom ? 'CUSTOM SANDBOX' : 'HISTORY REPLAY';
+      badge.className = isCustom ? 'mode-pill sandbox' : 'mode-pill';
+
+      document.getElementById('hud-clock').innerText = `Tick #${sandboxState.tick} | ${sandboxState.timestamp}`;
+      document.getElementById('kpi-yield').innerText = `${sandboxState.kpi.eds_yield.toFixed(2)}%`;
+      document.getElementById('kpi-power').innerText = `${Math.round(sandboxState.kpi.power_kw).toLocaleString()} kW`;
+      document.getElementById('kpi-cost').innerText = `$${Math.round(sandboxState.kpi.unit_cost).toLocaleString()}`;
+
+      // OHT calculation
+      const euvFeed = sandboxState.equipments.PHOTO_EUV.feed_rate;
+      const activeOht = Math.round(18 * euvFeed + Math.max(0, sandboxState.wip_buffers.ETCH - 60) * 0.25);
+      const ohtSec = (56.0 + activeOht * 0.45).toFixed(1);
+      document.getElementById('kpi-oht').innerText = `${ohtSec}s`;
+      document.getElementById('oht-summary-mini').innerText = `OHT ${activeOht}대 가동 (${ohtSec}s)`;
+
+      // 3D Mesh Emissive Update
+      Object.entries(sandboxState.equipments).forEach(([eqId, st]) => {
+        const mesh = fabMeshes[eqId];
+        const wip = sandboxState.wip_buffers[eqId] ?? 0;
+        if (st.status === 'MAINTENANCE' || st.rul < 25) {
+          mesh.material.emissive.setHex(0xef4444);
+          mesh.material.emissiveIntensity = 0.78;
+        } else if (wip >= 80 || st.rul < 50) {
+          mesh.material.emissive.setHex(0xf59e0b);
+          mesh.material.emissiveIntensity = 0.55;
+        } else {
+          mesh.material.emissive.setHex(0x10b981);
+          mesh.material.emissiveIntensity = 0.28;
+        }
+      });
+
+      // AI Panel Update
+      document.getElementById('ai-badge').innerText = sandboxState.trigger_reason || '정상 자율 운전';
+      const feedEl = document.getElementById('debate-feed');
+      feedEl.innerHTML = '';
+      if (sandboxState.debate && sandboxState.debate.length > 0) {
+        sandboxState.debate.forEach(d => {
+          const isGem = d.speaker.includes('Gemini');
+          const div = document.createElement('div');
+          div.className = `msg-card ${isGem ? 'gemini' : ''}`;
+          div.innerHTML = `<div class="msg-head"><span>${d.speaker}</span><span>Turn ${d.turn}</span></div><div>${d.text}</div>`;
+          feedEl.appendChild(div);
+        });
+      } else {
+        feedEl.innerHTML = `<div style="text-align:center; color:var(--text-secondary); font-size:12px; margin-top:32px;">특이 이벤트 없음</div>`;
+      }
+      document.getElementById('ai-action-json').innerText = sandboxState.final_action
+        ? JSON.stringify(sandboxState.final_action, null, 2)
+        : '기존 공정 파라미터 유지';
+
+      selectStation(selectedStationId);
+    }
+
+    document.getElementById('btn-apply-params').addEventListener('click', () => {
+      const eq = sandboxState.equipments[selectedStationId];
+      eq.feed_rate = Number(document.getElementById('inp-feed').value);
+      eq.load_ratio = Number(document.getElementById('inp-load').value) / 100.0;
+      eq.chamber_temp = Number(document.getElementById('inp-temp').value);
+      eq.rul = Number(document.getElementById('inp-rul').value);
+      if (eq.rul > 0 && eq.status === 'MAINTENANCE') eq.status = 'RUNNING';
+
+      sandboxState.trigger_reason = `TUNED:${selectedStationId}`;
+      sandboxState.debate = [{
+        speaker: "엔지니어 수동 제어",
+        turn: 1,
+        text: `${selectedStationId} 설정치 변경 → Feed ${eq.feed_rate}x, 부하 ${Math.round(eq.load_ratio*100)}%, 온도 ${eq.chamber_temp}°C, RUL ${eq.rul}%`
+      }];
+      sandboxState.final_action = { station: selectedStationId, feed_rate: eq.feed_rate, load_ratio: eq.load_ratio, temp: eq.chamber_temp, rul: eq.rul };
+      syncVisuals(true);
+    });
+
+    document.getElementById('btn-exec-pm').addEventListener('click', () => {
+      const eq = sandboxState.equipments[selectedStationId];
+      eq.status = 'MAINTENANCE';
+      eq.maint_type = 'PM';
+      eq.maint_remain = 2;
+      eq.rul = 100.0;
+      eq.load_ratio = 0.0;
+      sandboxState.kpi.unit_cost += 95;
+      sandboxState.trigger_reason = `MANUAL_PM:${selectedStationId}`;
+      sandboxState.debate = [{ speaker: "설비보전 파트", turn: 1, text: `${selectedStationId} 예방정비(PM) 시작 (RUL 100% 복원, 소요 2틱)` }];
+      sandboxState.final_action = { station: selectedStationId, action: "PM_STARTED" };
+      syncVisuals(true);
+    });
+
+    document.getElementById('btn-exec-bm').addEventListener('click', () => {
+      const eq = sandboxState.equipments[selectedStationId];
+      eq.status = 'MAINTENANCE';
+      eq.maint_type = 'BM';
+      eq.maint_remain = 6;
+      eq.rul = 0.0;
+      eq.load_ratio = 0.0;
+      sandboxState.kpi.eds_yield = Math.max(90.0, sandboxState.kpi.eds_yield - 1.4);
+      sandboxState.kpi.unit_cost += 380;
+      sandboxState.trigger_reason = `INJECTED_BM:${selectedStationId}`;
+      sandboxState.debate = [{ speaker: "Gemini (설비·원가)", turn: 1, text: `${selectedStationId} 돌발고장(BM) 발생! 긴급 복구 6틱 및 복구 비용 $4,500 반영.` }];
+      sandboxState.final_action = { station: selectedStationId, action: "BM_RECOVERY" };
+      syncVisuals(true);
+    });
+
+    document.getElementById('btn-reset-history').addEventListener('click', () => {
+      sandboxState = JSON.parse(JSON.stringify(MOCK_HISTORY[historyIdx]));
+      syncVisuals(false);
+    });
+
+    // ==========================================
+    // 5. BATCH SIMULATION ENGINE -> AUTO SWITCH TO REPORT PAGE
+    // ==========================================
+    function stepPhysics(state) {
+      const pipeline = ["PHOTO_EUV", "ETCH", "HBM_TSV"];
+      let power = 430;
+      let loadSum = 0;
+
+      pipeline.forEach((eqId, idx) => {
+        const eq = state.equipments[eqId];
+        const cfg = equipConfigs.find(c => c.id === eqId);
+
+        if (eq.status === 'MAINTENANCE') {
+          eq.maint_remain = (eq.maint_remain || 2) - 1;
+          if (eq.maint_remain <= 0) {
+            eq.status = 'RUNNING';
+            eq.maint_type = null;
+            eq.rul = 100.0;
+            eq.load_ratio = 0.78;
+            eq.feed_rate = 1.0;
+          }
+          power += 90;
+          return;
+        }
+
+        const inFlow = idx === 0 ? 12 * eq.feed_rate : Math.min(14, state.wip_buffers[pipeline[idx - 1]] * 0.25);
+        const outFlow = 11 * eq.load_ratio;
+        state.wip_buffers[eqId] = Math.min(100, Math.max(10, Math.round(state.wip_buffers[eqId] + inFlow - outFlow)));
+
+        eq.chamber_temp = Number((eq.chamber_temp + (eq.load_ratio - 0.75) * 2.1).toFixed(1));
+        const tempStress = Math.max(0, (eq.chamber_temp - cfg.optTemp) * 0.14);
+        const deg = 0.75 + eq.load_ratio * 1.15 + tempStress;
+        eq.rul = Math.max(0.0, Number((eq.rul - deg).toFixed(1)));
+
+        if (eq.rul === 0.0) {
+          eq.status = 'MAINTENANCE';
+          eq.maint_type = 'BM';
+          eq.maint_remain = 6;
+          eq.load_ratio = 0.0;
+          state.kpi.unit_cost += 340;
+          state.kpi.eds_yield = Math.max(91.0, state.kpi.eds_yield - 1.1);
+        }
+
+        power += 375 * eq.load_ratio + Math.max(0, eq.chamber_temp - 40) * 2.4;
+        loadSum += eq.load_ratio;
+      });
+
+      state.tick += 1;
+      state.timestamp = `Sim +${state.tick - 103} Tick`;
+      state.kpi.power_kw = Math.round(power);
+      state.kpi.eds_yield = Number(Math.min(99.4, Math.max(91.0, state.kpi.eds_yield + (loadSum > 1.8 ? 0.05 : -0.09))).toFixed(2));
+      state.kpi.unit_cost = Math.round(1120 + (power / 15) + (100 - state.kpi.eds_yield) * 34);
+
+      return JSON.parse(JSON.stringify(state));
+    }
+
+    document.getElementById('btn-run-sim').addEventListener('click', () => {
+      const steps = Number(document.getElementById('sel-batch-ticks').value);
+      const snapshots = [];
+
+      for (let i = 0; i < steps; i++) {
+        snapshots.push(stepPhysics(sandboxState));
+      }
+
+      const runId = `run_${Date.now()}`;
+      const startT = snapshots[0].tick;
+      const endT = snapshots[snapshots.length - 1].tick;
+      const label = `실행 #${simulationRunArchive.length}: Tick #${startT}~#${endT} (${steps}틱)`;
+
+      simulationRunArchive.unshift({ id: runId, name: label, snapshots });
+      activeReportRunId = runId;
+
+      const sel = document.getElementById('rep-run-selector');
+      sel.innerHTML = '';
+      simulationRunArchive.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.innerText = item.name;
+        sel.appendChild(opt);
+      });
+      sel.value = runId;
+
+      syncVisuals(true);
+      // Automatically navigate to the dedicated Report & Charts Page upon completion
+      switchPage('view-reports');
+    });
+
+    // ==========================================
+    // 6. REPORT PAGE & CHART.JS RENDERER
+    // ==========================================
+    let charts = {};
+
+    document.getElementById('rep-run-selector').addEventListener('change', (e) => {
+      activeReportRunId = e.target.value;
+      renderReportDashboard();
+    });
+
+    function renderReportDashboard() {
+      const runEntry = simulationRunArchive.find(r => r.id === activeReportRunId) || simulationRunArchive[0];
+      const snaps = runEntry.snapshots;
+      const count = snaps.length;
+
+      document.getElementById('rep-page-subtitle').innerText =
+        `${runEntry.name}  |  총 ${(count * 0.5).toFixed(1)}시간 공정 시뮬레이션 완료 분석`;
+
+      let sumYield = 0, sumPower = 0, sumCost = 0, wafers = 0;
+      const stats = {
+        PHOTO_EUV: { work: 0, wait: 0, pm: 0, bm: 0, finalRul: 0, finalTemp: 0 },
+        ETCH:      { work: 0, wait: 0, pm: 0, bm: 0, finalRul: 0, finalTemp: 0 },
+        HBM_TSV:   { work: 0, wait: 0, pm: 0, bm: 0, finalRul: 0, finalTemp: 0 }
+      };
+
+      const labels = [];
+      const yieldSeries = [], costSeries = [], powerSeries = [], avgWipSeries = [];
+      const rulEuv = [], rulEtch = [], rulTsv = [];
+
+      snaps.forEach(s => {
+        labels.push(`#${s.tick}`);
+        sumYield += s.kpi.eds_yield;
+        sumPower += s.kpi.power_kw;
+        sumCost += s.kpi.unit_cost;
+
+        yieldSeries.push(s.kpi.eds_yield);
+        costSeries.push(s.kpi.unit_cost);
+        powerSeries.push(s.kpi.power_kw);
+
+        const wAvg = Math.round((s.wip_buffers.PHOTO_EUV + s.wip_buffers.ETCH + s.wip_buffers.HBM_TSV) / 3);
+        avgWipSeries.push(wAvg);
+
+        rulEuv.push(s.equipments.PHOTO_EUV.rul);
+        rulEtch.push(s.equipments.ETCH.rul);
+        rulTsv.push(s.equipments.HBM_TSV.rul);
+
+        const tsv = s.equipments.HBM_TSV;
+        if (tsv.status === 'RUNNING') {
+          wafers += Math.round(125 * tsv.load_ratio * (s.kpi.eds_yield / 100));
+        }
+
+        Object.keys(stats).forEach(eqId => {
+          const eq = s.equipments[eqId];
+          const wip = s.wip_buffers[eqId] ?? 0;
+          stats[eqId].finalRul = eq.rul;
+          stats[eqId].finalTemp = eq.chamber_temp;
+
+          if (eq.status === 'MAINTENANCE') {
+            if (eq.maint_type === 'BM') stats[eqId].bm += 1;
+            else stats[eqId].pm += 1;
+          } else if (wip >= 80 || eq.feed_rate < 0.7) {
+            stats[eqId].wait += 1;
+          } else {
+            stats[eqId].work += 1;
+          }
+        });
+      });
+
+      document.getElementById('rep-kpi-wafers').innerText = `${wafers.toLocaleString()} Wafers`;
+      document.getElementById('rep-kpi-yield').innerText = `${(sumYield / count).toFixed(2)}%`;
+      document.getElementById('rep-kpi-energy').innerText = `${Math.round(sumPower * 0.5).toLocaleString()} kWh`;
+      document.getElementById('rep-kpi-cost').innerText = `$${Math.round(sumCost / count).toLocaleString()}`;
+
+      // Render Table & Collect Bar Data
+      const tbody = document.getElementById('rep-table-body');
+      tbody.innerHTML = '';
+      const barWork = [], barWait = [], barPm = [], barBm = [];
+      let worstStation = '';
+      let worstScore = -1;
+
+      equipConfigs.forEach(cfg => {
+        const st = stats[cfg.id];
+        const pWork = Math.round((st.work / count) * 100);
+        const pWait = Math.round((st.wait / count) * 100);
+        const pPm   = Math.round((st.pm / count) * 100);
+        const pBm   = Math.max(0, 100 - pWork - pWait - pPm);
+
+        barWork.push(pWork);
+        barWait.push(pWait);
+        barPm.push(pPm);
+        barBm.push(pBm);
+
+        const score = pWait + pBm * 2 + (100 - st.finalRul) * 0.3;
+        if (score > worstScore) {
+          worstScore = score;
+          worstStation = `${cfg.label} (${cfg.id})`;
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${cfg.label}</strong></td>
+          <td>
+            <div class="stacked-bar">
+              <div class="sb-work" style="width:${pWork}%"></div>
+              <div class="sb-wait" style="width:${pWait}%"></div>
+              <div class="sb-pm" style="width:${pPm}%"></div>
+              <div class="sb-fail" style="width:${pBm}%"></div>
+            </div>
+          </td>
+          <td style="color:#10b981;font-weight:700">${pWork}%</td>
+          <td style="color:#f59e0b">${pWait}%</td>
+          <td>PM ${pPm}% / BM ${pBm}%</td>
+          <td style="font-weight:700;color:${st.finalRul < 25 ? '#ef4444' : '#f1f5f9'}">${st.finalRul.toFixed(1)}%</td>
+          <td>${st.finalTemp.toFixed(1)}°C</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('rep-diagnosis-box').innerHTML = `
+        <strong>• 주요 병목/리스크 식별 설비:</strong> ${worstStation}<br/>
+        <strong>• 엔지니어링 권고:</strong> 총 ${count}틱 시뮬레이션 동안 양품 웨이퍼 ${wafers.toLocaleString()}매가 생산되었습니다.
+        최종 RUL이 25% 이하로 하락한 설비는 돌발 고장(BM) 전 선제적 예방 정비(PM) 투입을 권장합니다.
+      `;
+
+      // Render 4 Chart.js Charts
+      Object.values(charts).forEach(c => c.destroy());
+
+      const commonGrid = { color: 'rgba(148, 163, 184, 0.12)' };
+      const commonTick = { color: '#94a3b8', font: { size: 11 } };
+
+      charts.yieldCost = new Chart(document.getElementById('chart-yield-cost'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'EDS 수율 (%)', data: yieldSeries, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.15)', yAxisID: 'y', tension: 0.3 },
+            { label: '단위 원가 ($)', data: costSeries, borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.15)', yAxisID: 'y1', tension: 0.3 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 11 } } } },
+          scales: {
+            x: { grid: commonGrid, ticks: commonTick },
+            y: { type: 'linear', position: 'left', grid: commonGrid, ticks: commonTick },
+            y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: commonTick }
+          }
+        }
+      });
+
+      charts.rulTrend = new Chart(document.getElementById('chart-rul-trend'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'EUV 노광기', data: rulEuv, borderColor: '#3b82f6', tension: 0.25 },
+            { label: 'ETCH 식각', data: rulEtch, borderColor: '#f59e0b', tension: 0.25 },
+            { label: 'HBM TSV', data: rulTsv, borderColor: '#a855f7', tension: 0.25 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 11 } } } },
+          scales: {
+            x: { grid: commonGrid, ticks: commonTick },
+            y: { min: 0, max: 100, grid: commonGrid, ticks: commonTick }
+          }
+        }
+      });
+
+      charts.powerWip = new Chart(document.getElementById('chart-power-wip'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { type: 'line', label: '평균 WIP 적체율 (%)', data: avgWipSeries, borderColor: '#f43f5e', yAxisID: 'y1', tension: 0.3 },
+            { type: 'bar', label: '전력 소모량 (kW)', data: powerSeries, backgroundColor: 'rgba(6, 182, 212, 0.55)', yAxisID: 'y' }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 11 } } } },
+          scales: {
+            x: { grid: commonGrid, ticks: commonTick },
+            y: { position: 'left', grid: commonGrid, ticks: commonTick },
+            y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: commonTick }
+          }
+        }
+      });
+
+      charts.stationUtil = new Chart(document.getElementById('chart-station-util'), {
+        type: 'bar',
+        data: {
+          labels: ['EUV 노광기', 'ETCH 식각', 'HBM TSV'],
+          datasets: [
+            { label: 'Working (%)', data: barWork, backgroundColor: '#10b981' },
+            { label: 'Blocked/대기 (%)', data: barWait, backgroundColor: '#f59e0b' },
+            { label: 'PM 정비 (%)', data: barPm, backgroundColor: '#3b82f6' },
+            { label: 'BM 고장 (%)', data: barBm, backgroundColor: '#ef4444' }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 11 } } } },
+          scales: {
+            x: { stacked: true, grid: commonGrid, ticks: commonTick },
+            y: { stacked: true, max: 100, grid: commonGrid, ticks: commonTick }
+          }
+        }
+      });
+    }
+
+    document.getElementById('btn-download-html').addEventListener('click', () => {
+      const source = document.getElementById('view-reports');
+      const copy = source.cloneNode(true);
+      const charts = [...source.querySelectorAll('canvas')];
+      copy.querySelectorAll('canvas').forEach((canvas, index) => {
+        const image = document.createElement('img');
+        image.src = charts[index].toDataURL('image/png');
+        image.alt = `시뮬레이션 차트 ${index + 1}`;
+        image.style.maxWidth = '100%';
+        canvas.replaceWith(image);
+      });
+      copy.querySelectorAll('button, select').forEach(control => control.remove());
+      const content = copy.innerHTML;
+      const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>M16 Fab Report</title>
+        <style>body{background:#060a12;color:#f1f5f9;font-family:sans-serif;padding:28px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #334155;padding:10px;}</style>
+        </head><body>${content}</body></html>`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+      a.download = `M16_Fab_Report_${Date.now()}.html`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+
+    // ==========================================
+    // 7. TIMELINE CONTROLS & ANIMATION LOOP
+    // ==========================================
+    const slider = document.getElementById('timeline-slider');
+    let playTimer = null;
+
+    function loadHistory(idx) {
+      historyIdx = idx;
+      slider.value = idx;
+      document.getElementById('timeline-label').innerText = `${idx + 1} / ${MOCK_HISTORY.length}`;
+      sandboxState = JSON.parse(JSON.stringify(MOCK_HISTORY[idx]));
+      syncVisuals(false);
+    }
+
+    slider.addEventListener('input', e => loadHistory(Number(e.target.value)));
+    document.getElementById('btn-prev').addEventListener('click', () => loadHistory(Math.max(0, historyIdx - 1)));
+    document.getElementById('btn-next').addEventListener('click', () => loadHistory(Math.min(MOCK_HISTORY.length - 1, historyIdx + 1)));
+    document.getElementById('btn-play').addEventListener('click', () => {
+      const btn = document.getElementById('btn-play');
+      if (playTimer) {
+        clearInterval(playTimer);
+        playTimer = null;
+        btn.innerText = '▶';
+      } else {
+        btn.innerText = '❚❚';
+        playTimer = setInterval(() => loadHistory((historyIdx + 1) % MOCK_HISTORY.length), 1800);
+      }
+    });
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+      controls.update();
+
+      selectionRing.scale.setScalar(1.0 + Math.sin(t * 4.0) * 0.04);
+      ohtCarriers.forEach(c => {
+        const p = (t * 0.18 + c.userData.offset) % 1.0;
+        c.position.x = -8.5 + p * 17.0;
+      });
+
+      if (document.getElementById('view-monitor').classList.contains('active')) {
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(interactiveObjects, false);
+        if (hits.length > 0) {
+          const eqId = hits[0].object.userData.equipId;
+          const st = sandboxState.equipments[eqId];
+          const cfg = equipConfigs.find(c => c.id === eqId);
+          document.getElementById('tt-title').innerText = cfg.label;
+          document.getElementById('tt-state').innerText = st.status;
+          document.getElementById('tt-rul').innerText = `${st.rul.toFixed(1)}%`;
+          document.getElementById('tt-temp').innerText = `${st.chamber_temp.toFixed(1)}°C`;
+          document.getElementById('tt-load').innerText = `${Math.round(st.load_ratio * 100)}%`;
+          document.getElementById('tt-feed').innerText = `${st.feed_rate.toFixed(1)}x`;
+          tooltip.classList.add('visible');
+          document.body.style.cursor = 'pointer';
+        } else {
+          tooltip.classList.remove('visible');
+          document.body.style.cursor = 'default';
+        }
+        renderer.render(scene, camera);
+      }
+    }
+
+    loadHistory(2);
+    animate();
+  </script>
+</body>
+</html>

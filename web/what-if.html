@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SK hynix M16 Fab - 3D Digital Twin v3.5 (OHT & What-If Sandbox)</title>
+  <style>
+    :root {
+      --bg-dark: #070b14;
+      --panel-bg: rgba(13, 20, 36, 0.80);
+      --panel-border: rgba(86, 134, 214, 0.28);
+      --text-primary: #eef4ff;
+      --text-secondary: #8ea4c8;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-purple: #8b5cf6;
+      --status-ok: #10b981;
+      --status-warn: #f59e0b;
+      --status-crit: #ef4444;
+      --gpt-color: #10a37f;
+      --gemini-color: #6366f1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-primary);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    /* 1. Top Header & KPI HUD */
+    #top-hud {
+      position: fixed;
+      top: 18px;
+      left: 20px;
+      right: 20px;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 22px;
+    }
+
+    .brand-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #ef4444, #f97316);
+      font-weight: 800;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .mode-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 9px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.18);
+      color: var(--status-ok);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .mode-badge.sandbox {
+      background: rgba(139, 92, 246, 0.25);
+      color: #c4b5fd;
+      border-color: rgba(139, 92, 246, 0.55);
+    }
+
+    .brand-title h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-title span {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .kpi-group {
+      display: flex;
+      gap: 22px;
+      align-items: center;
+    }
+
+    .kpi-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .kpi-label {
+      font-size: 10.5px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .kpi-value {
+      font-size: 17px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      margin-top: 2px;
+    }
+
+    .kpi-value.good { color: var(--status-ok); }
+    .kpi-value.warn { color: var(--status-warn); }
+    .kpi-value.crit { color: var(--status-crit); }
+
+    /* 2. Left Panel: What-If Scenario Sandbox */
+    #sandbox-panel {
+      position: fixed;
+      top: 92px;
+      left: 20px;
+      width: 310px;
+      z-index: 10;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .panel-title-row h2 {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #e0e7ff;
+    }
+
+    .btn-reset {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: var(--text-secondary);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .btn-reset:hover {
+      color: #fff;
+      background: rgba(239, 68, 68, 0.3);
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .control-label strong {
+      color: var(--accent-cyan);
+    }
+
+    input[type="range"].sim-range {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 99px;
+      outline: none;
+    }
+
+    input[type="range"].sim-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent-purple);
+      border: 2px solid #fff;
+      cursor: pointer;
+    }
+
+    .fault-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+    }
+
+    .btn-fault {
+      background: rgba(239, 68, 68, 0.14);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 7px 4px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-fault:hover {
+      background: rgba(239, 68, 68, 0.35);
+      color: #fff;
+    }
+
+    .btn-pm {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.38);
+      color: #6ee7b7;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .btn-pm:hover {
+      background: rgba(16, 185, 129, 0.32);
+      color: #fff;
+    }
+
+    .oht-box {
+      background: rgba(6, 182, 212, 0.08);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      border-radius: 9px;
+      padding: 10px 12px;
+      font-size: 11.5px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .oht-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* 3. Floating Equipment RUL Tooltip */
+    #equip-tooltip {
+      position: fixed;
+      z-index: 30;
+      width: 260px;
+      padding: 14px 16px;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(16px, 16px);
+      transition: opacity 0.15s ease;
+    }
+
+    #equip-tooltip.visible { opacity: 1; }
+
+    .tooltip-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .tooltip-title { font-weight: 700; font-size: 14px; }
+
+    .status-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 99px;
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--status-ok);
+    }
+
+    .status-pill.crit {
+      background: rgba(239, 68, 68, 0.25);
+      color: var(--status-crit);
+    }
+
+    .rul-bar-wrap { margin-bottom: 10px; }
+    .rul-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .rul-track {
+      width: 100%;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .rul-fill {
+      height: 100%;
+      width: 80%;
+      background: var(--status-ok);
+      border-radius: 99px;
+      transition: width 0.25s ease, background-color 0.25s ease;
+    }
+
+    .tooltip-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .tooltip-metric span {
+      display: block;
+      color: var(--text-secondary);
+      font-size: 10px;
+    }
+
+    /* 4. Right Drawer: Dual AI Debate Viewer */
+    #ai-panel {
+      position: fixed;
+      top: 92px;
+      right: 20px;
+      bottom: 112px;
+      width: 365px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--panel-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-header h2 { font-size: 13.5px; font-weight: 700; }
+
+    .trigger-badge {
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--status-warn);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    .trigger-badge.idle {
+      background: rgba(142, 164, 200, 0.15);
+      color: var(--text-secondary);
+      border-color: transparent;
+    }
+
+    #debate-stream {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #debate-stream::-webkit-scrollbar { width: 5px; }
+    #debate-stream::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 99px;
+    }
+
+    .chat-bubble {
+      padding: 11px 13px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      background: rgba(255, 255, 255, 0.04);
+      border-left: 3px solid var(--accent-blue);
+    }
+
+    .chat-bubble.gpt { border-left-color: var(--gpt-color); }
+    .chat-bubble.gemini { border-left-color: var(--gemini-color); }
+
+    .chat-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .chat-bubble.gpt .chat-meta { color: #34d399; }
+    .chat-bubble.gemini .chat-meta { color: #a5b4fc; }
+
+    .consensus-box {
+      padding: 12px 16px;
+      background: rgba(6, 182, 212, 0.1);
+      border-top: 1px solid var(--panel-border);
+      font-size: 12px;
+    }
+
+    .consensus-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      margin-bottom: 4px;
+    }
+
+    .consensus-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #cffafe;
+      white-space: pre-wrap;
+    }
+
+    /* 5. Bottom Floating Timeline Replay Dock */
+    #timeline-dock {
+      position: fixed;
+      bottom: 18px;
+      left: 20px;
+      right: 20px;
+      z-index: 10;
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .playback-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-primary);
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+    }
+
+    .btn-icon:hover { background: rgba(59, 130, 246, 0.35); }
+    .btn-icon.primary { background: var(--accent-blue); border-color: var(--accent-blue); }
+
+    .slider-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .slider-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .slider-info strong { color: var(--text-primary); }
+
+    input[type="range"]#timeline-slider {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 99px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]#timeline-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      border: 2px solid #fff;
+      box-shadow: 0 0 10px var(--accent-cyan);
+      cursor: pointer;
+    }
+
+    .legend-group {
+      display: flex;
+      gap: 14px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <!-- Top HUD -->
+  <header id="top-hud" class="glass-panel">
+    <div class="brand-box">
+      <span class="brand-badge">M16 FAB v3.5</span>
+      <div class="brand-title">
+        <h1>SK hynix M16 스마트 팩토리 디지털 트윈</h1>
+        <span id="hud-timestamp">Tick #000 | Initializing...</span>
+      </div>
+      <span id="mode-indicator" class="mode-badge">HISTORY REPLAY</span>
+    </div>
+
+    <div class="kpi-group">
+      <div class="kpi-item">
+        <span class="kpi-label">EDS 수율 (Yield)</span>
+        <span id="kpi-yield" class="kpi-value good">98.42%</span>
+      </div>
+      <div class="kpi-item">
+        <span class="kpi-label">OHT 반송 지연</span>
+        <span id="kpi-oht" class="kpi-value">62.5s</span>
+      </div>
+      <div class="kpi-item">
+        <span class="kpi-label">실시간 전력 소모</span>
+        <span id="kpi-power" class="kpi-value">1,420 kW</span>
+      </div>
+      <div class="kpi-item">
+        <span class="kpi-label">웨이퍼 단위 원가</span>
+        <span id="kpi-cost" class="kpi-value">$1,185</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Left Panel: What-If Scenario Sandbox & OHT Telemetry -->
+  <aside id="sandbox-panel" class="glass-panel">
+    <div class="panel-title-row">
+      <h2>What-If 시나리오 샌드박스</h2>
+      <button id="btn-reset-sandbox" class="btn-reset">이력 복귀</button>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>웨이퍼 투입 배율 (Wafer Start)</span>
+        <strong id="lbl-wafer-rate">1.0x</strong>
+      </div>
+      <input type="range" id="sim-wafer-rate" class="sim-range" min="0.4" max="1.6" step="0.1" value="1.0" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>클린룸 냉각 부하 제어</span>
+        <strong id="lbl-cooling">100%</strong>
+      </div>
+      <input type="range" id="sim-cooling" class="sim-range" min="60" max="130" step="5" value="100" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label"><span>설비 돌발 고장(BM) 강제 주입</span></div>
+      <div class="fault-grid">
+        <button class="btn-fault" data-fault="PHOTO_EUV">EUV 다운</button>
+        <button class="btn-fault" data-fault="ETCH">ETCH 다운</button>
+        <button class="btn-fault" data-fault="HBM_TSV">TSV 다운</button>
+      </div>
+    </div>
+
+    <button id="btn-sim-step" class="btn-pm">▶ 샌드박스 +1 틱 물리 연산 실행</button>
+
+    <div class="oht-box">
+      <div class="oht-row">
+        <span style="color: var(--text-secondary)">OHT 가동 대차 (총 48대)</span>
+        <strong id="oht-active">22대 (46%)</strong>
+      </div>
+      <div class="oht-row">
+        <span style="color: var(--text-secondary)">EUV → ETCH 반송 시간</span>
+        <strong id="oht-r1">63.1초</strong>
+      </div>
+      <div class="oht-row">
+        <span style="color: var(--text-secondary)">ETCH → TSV 반송 시간</span>
+        <strong id="oht-r2">78.4초</strong>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Floating Cursor Tooltip -->
+  <div id="equip-tooltip" class="glass-panel">
+    <div class="tooltip-header">
+      <span id="tt-name" class="tooltip-title">ETCH_CHAMBER_01</span>
+      <span id="tt-status" class="status-pill">RUNNING</span>
+    </div>
+    <div class="rul-bar-wrap">
+      <div class="rul-bar-label">
+        <span>잔여 유효 수명 (RUL)</span>
+        <strong id="tt-rul-text">84.5%</strong>
+      </div>
+      <div class="rul-track">
+        <div id="tt-rul-bar" class="rul-fill"></div>
+      </div>
+    </div>
+    <div class="tooltip-grid">
+      <div class="tooltip-metric">
+        <span>챔버 온도</span>
+        <strong id="tt-temp">64.2°C</strong>
+      </div>
+      <div class="tooltip-metric">
+        <span>WIP 버퍼 적체율</span>
+        <strong id="tt-wip">48%</strong>
+      </div>
+      <div class="tooltip-metric">
+        <span>설비 가동 부하</span>
+        <strong id="tt-load">82%</strong>
+      </div>
+      <div class="tooltip-metric">
+        <span>투입 속도 (Feed)</span>
+        <strong id="tt-feed">1.0x</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel: Dual AI Council Debate Viewer -->
+  <aside id="ai-panel" class="glass-panel">
+    <div class="panel-header">
+      <h2>듀얼 AI 의사결정 위원회</h2>
+      <span id="ai-trigger-badge" class="trigger-badge idle">자율 운전 중</span>
+    </div>
+    <div id="debate-stream"></div>
+    <div class="consensus-box">
+      <div class="consensus-title">최종 합의 제어 액션 (Consensus Action)</div>
+      <div id="ai-final-action" class="consensus-code">대기 중 (이상 징후 없음)</div>
+    </div>
+  </aside>
+
+  <!-- Bottom Floating Timeline Slider -->
+  <footer id="timeline-dock" class="glass-panel">
+    <div class="playback-controls">
+      <button id="btn-prev" class="btn-icon" title="이전 틱">◀</button>
+      <button id="btn-play" class="btn-icon primary" title="자동 재생/일시정지">▶</button>
+      <button id="btn-next" class="btn-icon" title="다음 틱">▶|</button>
+    </div>
+
+    <div class="slider-wrapper">
+      <div class="slider-info">
+        <span>타임라인 리플레이 (Time-Travel Debugging)</span>
+        <span>스냅샷: <strong id="slider-tick-label">1 / 1</strong></span>
+      </div>
+      <input type="range" id="timeline-slider" min="0" max="0" value="0" />
+    </div>
+
+    <div class="legend-group">
+      <div class="legend-item"><span class="dot" style="background: var(--status-ok)"></span>정상</div>
+      <div class="legend-item"><span class="dot" style="background: var(--status-warn)"></span>병목/주의</div>
+      <div class="legend-item"><span class="dot" style="background: var(--status-crit)"></span>RUL 위험/BM</div>
+    </div>
+  </footer>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const MOCK_HISTORY = [
+      {
+        tick_id: 101,
+        timestamp: "2026-11-25T13:30:00Z",
+        eds_yield: 98.65,
+        power_kw: 1390,
+        unit_cost: 1170,
+        wip_buffers: JSON.stringify({ PHOTO_EUV: 45, ETCH: 52, HBM_TSV: 40 }),
+        equipment_states: JSON.stringify({
+          PHOTO_EUV: { status: "RUNNING", rul: 88.0, chamber_temp: 22.1, load_ratio: 0.78, feed_rate: 1.0 },
+          ETCH:      { status: "RUNNING", rul: 61.5, chamber_temp: 65.0, load_ratio: 0.85, feed_rate: 1.0 },
+          HBM_TSV:   { status: "RUNNING", rul: 91.2, chamber_temp: 41.0, load_ratio: 0.72, feed_rate: 1.0 }
+        }),
+        trigger_reason: null,
+        debate_transcript: null,
+        final_action: null
+      },
+      {
+        tick_id: 102,
+        timestamp: "2026-11-25T14:00:00Z",
+        eds_yield: 97.90,
+        power_kw: 1580,
+        unit_cost: 1245,
+        wip_buffers: JSON.stringify({ PHOTO_EUV: 62, ETCH: 86, HBM_TSV: 78 }),
+        equipment_states: JSON.stringify({
+          PHOTO_EUV: { status: "RUNNING", rul: 84.2, chamber_temp: 22.4, load_ratio: 0.82, feed_rate: 0.4 },
+          ETCH:      { status: "RUNNING", rul: 18.4, chamber_temp: 74.8, load_ratio: 0.96, feed_rate: 1.0 },
+          HBM_TSV:   { status: "RUNNING", rul: 87.0, chamber_temp: 44.5, load_ratio: 0.88, feed_rate: 1.0 }
+        }),
+        trigger_reason: "RUL_CRITICAL:ETCH (18.4%) & WIP_BOTTLENECK",
+        debate_transcript: JSON.stringify([
+          { speaker: "ChatGPT (생산기술)", turn: 1, text: "ETCH 챔버 RUL이 18.4%까지 하락했으나 현재 HBM 납기 물량이 집중되어 있습니다. 즉시 가동 중단 시 수율 손실이 1.2% 예상됩니다." },
+          { speaker: "Gemini (설비·원가)", turn: 2, text: "챔버 온도가 74.8°C로 임계치를 초과했습니다. 돌발 고장(BM) 발생 시 복구 비용 $4,500과 6틱 다운타임이 발생하므로 선제적 PM이 유리합니다." },
+          { speaker: "ChatGPT & Gemini 합의", turn: 3, text: "상류 PHOTO_EUV 투입률을 40%로 감속(Throttling)해 버퍼 적체를 해소한 뒤, ETCH 설비의 예방 정비(PM)를 즉시 승인합니다." }
+        ]),
+        final_action: JSON.stringify({ PHOTO_EUV_feed_rate: 0.4, ETCH_action: "SCHEDULE_PM_NOW", target_temp: 64.0 }, null, 2)
+      },
+      {
+        tick_id: 103,
+        timestamp: "2026-11-25T14:30:00Z",
+        eds_yield: 98.48,
+        power_kw: 1210,
+        unit_cost: 1160,
+        wip_buffers: JSON.stringify({ PHOTO_EUV: 48, ETCH: 35, HBM_TSV: 50 }),
+        equipment_states: JSON.stringify({
+          PHOTO_EUV: { status: "RUNNING", rul: 82.5, chamber_temp: 22.0, load_ratio: 0.65, feed_rate: 1.0 },
+          ETCH:      { status: "MAINTENANCE", rul: 100.0, chamber_temp: 30.0, load_ratio: 0.0, feed_rate: 0.0 },
+          HBM_TSV:   { status: "RUNNING", rul: 84.1, chamber_temp: 41.2, load_ratio: 0.75, feed_rate: 1.0 }
+        }),
+        trigger_reason: "PM_EXECUTED:ETCH",
+        debate_transcript: null,
+        final_action: JSON.stringify({ status: "PM 진행 완료 및 정상 라인 밸런싱 복귀" })
+      }
+    ];
+
+    // ==========================================
+    // 1. Three.js Scene & OHT Carriers
+    // ==========================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x070b14);
+    scene.fog = new THREE.FogExp2(0x070b14, 0.022);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 14, 21);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2.1;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const dirLight = new THREE.DirectionalLight(0x93c5fd, 1.4);
+    dirLight.position.set(10, 20, 12);
+    scene.add(dirLight);
+
+    scene.add(new THREE.GridHelper(36, 36, 0x1e3a8a, 0x111c33));
+
+    const equipConfigs = [
+      { id: 'PHOTO_EUV', label: 'EUV 노광기 #01', x: -7, size: [4.2, 3.2, 3.6] },
+      { id: 'ETCH',      label: '식각 챔버 #02',  x: 0,  size: [3.8, 2.8, 3.4] },
+      { id: 'HBM_TSV',   label: 'HBM TSV 적층기', x: 7,  size: [4.0, 3.4, 3.6] }
+    ];
+
+    const fabMeshes = {};
+    const interactiveObjects = [];
+
+    equipConfigs.forEach(cfg => {
+      const geo = new THREE.BoxGeometry(...cfg.size);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        roughness: 0.35,
+        metalness: 0.65,
+        emissive: 0x10b981,
+        emissiveIntensity: 0.3
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(cfg.x, cfg.size[1] / 2, 0);
+      mesh.userData = { equipId: cfg.id, label: cfg.label };
+
+      const edges = new THREE.EdgesGeometry(geo);
+      mesh.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.45 })));
+
+      scene.add(mesh);
+      fabMeshes[cfg.id] = mesh;
+      interactiveObjects.push(mesh);
+    });
+
+    // OHT Overhead Track + Animated FOUP Vehicles
+    const trackMaterials = [-4.25, 4.25].map(x => {
+      const material = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.45 });
+      const track = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.14, 0.65), material);
+      track.position.set(x, 4.5, 0);
+      scene.add(track);
+      return material;
+    });
+
+    const ohtCarriers = [];
+    const carrierGeo = new THREE.BoxGeometry(0.65, 0.45, 0.55);
+    for (let i = 0; i < 6; i++) {
+      const cMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, emissive: 0x38bdf8, emissiveIntensity: 0.6 });
+      const carrier = new THREE.Mesh(carrierGeo, cMat);
+      carrier.position.set(-8 + i * 3.0, 4.2, 0);
+      carrier.userData.progress = i / 6;
+      scene.add(carrier);
+      ohtCarriers.push(carrier);
+    }
+
+    // ==========================================
+    // 2. Raycaster & Tooltip
+    // ==========================================
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const tooltip = document.getElementById('equip-tooltip');
+    let hoveredEquipId = null;
+    let currentEquipStates = {};
+    let currentWipBuffers = {};
+    const routeSpeeds = [0.20, 0.20];
+
+    window.addEventListener('mousemove', (e) => {
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      tooltip.style.left = `${Math.min(e.clientX, window.innerWidth - 280)}px`;
+      tooltip.style.top = `${Math.min(e.clientY, window.innerHeight - 200)}px`;
+    });
+
+    function updateTooltipContent(eqId) {
+      const state = currentEquipStates[eqId];
+      const wip = currentWipBuffers[eqId] ?? 0;
+      if (!state) return;
+
+      const cfg = equipConfigs.find(c => c.id === eqId);
+      document.getElementById('tt-name').innerText = cfg ? cfg.label : eqId;
+
+      const statusEl = document.getElementById('tt-status');
+      statusEl.innerText = state.status;
+      statusEl.className = `status-pill ${state.rul < 25 || state.status !== 'RUNNING' ? 'crit' : ''}`;
+
+      document.getElementById('tt-rul-text').innerText = `${state.rul.toFixed(1)}%`;
+      const bar = document.getElementById('tt-rul-bar');
+      bar.style.width = `${state.rul}%`;
+      bar.style.backgroundColor = state.rul < 25 ? 'var(--status-crit)' : state.rul < 50 ? 'var(--status-warn)' : 'var(--status-ok)';
+
+      document.getElementById('tt-temp').innerText = `${state.chamber_temp.toFixed(1)}°C`;
+      document.getElementById('tt-wip').innerText = `${wip}%`;
+      document.getElementById('tt-load').innerText = `${Math.round(state.load_ratio * 100)}%`;
+      document.getElementById('tt-feed').innerText = `${state.feed_rate.toFixed(1)}x`;
+    }
+
+    // ==========================================
+    // 3. OHT Logistics Calculator (Client Mirror of oht_logistics.py)
+    // ==========================================
+    function computeOhtMetrics(wip, equips, recorded = null) {
+      const routes = [["PHOTO_EUV", "ETCH", 140.0], ["ETCH", "HBM_TSV", 185.0]];
+      const routeCapacity = (48 - 6) / routes.length;
+      let activeTotal = 0;
+      const times = [];
+
+      routes.forEach(([src, dst, dist]) => {
+        const feed = equips[src]?.feed_rate ?? 1.0;
+        const running = equips[src]?.status === "RUNNING" ? 1 : 0;
+        const dstWip = wip[dst] ?? 50;
+
+        const moving = Math.round(10 * feed * running);
+        const queuing = Math.round(Math.max(0, dstWip - 65) * 0.25);
+        const observed = recorded?.routes?.[`${src}_TO_${dst}`];
+        const active = observed?.active_carriers ?? (moving + queuing);
+        activeTotal += active;
+
+        const congestion = observed?.congestion_ratio ?? Math.min(1.5, active / routeCapacity);
+        const baseSec = (dist / 3.2) + 18.0;
+        const actualSec = observed?.transfer_time_sec ?? baseSec * (1.0 + 0.65 * Math.pow(congestion, 2.2));
+        times.push({ congestion, actualSec });
+      });
+
+      const util = Math.min(1.0, activeTotal / 48.0);
+      document.getElementById('oht-active').innerText = `${activeTotal}대 (${Math.round(util * 100)}%)`;
+      document.getElementById('oht-r1').innerText = `${times[0].actualSec.toFixed(1)}초`;
+      document.getElementById('oht-r2').innerText = `${times[1].actualSec.toFixed(1)}초`;
+
+      const avgSec = (times[0].actualSec + times[1].actualSec) / 2;
+      document.getElementById('kpi-oht').innerText = `${avgSec.toFixed(1)}s`;
+
+      // Update 3D OHT track color & carrier velocity
+      times.forEach(({ congestion }, index) => {
+        trackMaterials[index].color.setHex(congestion > 0.85 ? 0xf59e0b : 0x38bdf8);
+        routeSpeeds[index] = 0.20 / (1 + 0.65 * congestion ** 2.2);
+      });
+      return { activeTotal, util, avgSec, times };
+    }
+
+    // ==========================================
+    // 4. Snapshot Renderer & What-If Sandbox Engine
+    // ==========================================
+    let historyData = [];
+    let currentIndex = 0;
+    let playTimer = null;
+    let isSandboxMode = false;
+    let sandboxState = null;
+
+    function applyStateToVisuals(stateObj, labelText, triggerReason, debateJson, finalActionText, recordedOht = null) {
+      currentEquipStates = stateObj.equipments;
+      currentWipBuffers = stateObj.wip_buffers;
+
+      document.getElementById('hud-timestamp').innerText = labelText;
+      document.getElementById('kpi-yield').innerText = `${stateObj.kpi.eds_yield.toFixed(2)}%`;
+      document.getElementById('kpi-power').innerText = `${Math.round(stateObj.kpi.power_kw).toLocaleString()} kW`;
+      document.getElementById('kpi-cost').innerText = stateObj.kpi.unit_cost == null ? "—" : `$${Math.round(stateObj.kpi.unit_cost).toLocaleString()}`;
+
+      computeOhtMetrics(currentWipBuffers, currentEquipStates, recordedOht);
+
+      Object.entries(currentEquipStates).forEach(([eqId, st]) => {
+        const mesh = fabMeshes[eqId];
+        const wip = currentWipBuffers[eqId] ?? 0;
+        if (!mesh) return;
+
+        if (st.status === 'MAINTENANCE' || st.rul < 25) {
+          mesh.material.emissive.setHex(0xef4444);
+          mesh.material.emissiveIntensity = 0.78;
+        } else if (wip >= 80 || st.rul < 50) {
+          mesh.material.emissive.setHex(0xf59e0b);
+          mesh.material.emissiveIntensity = 0.55;
+        } else {
+          mesh.material.emissive.setHex(0x10b981);
+          mesh.material.emissiveIntensity = 0.28;
+        }
+      });
+
+      const badge = document.getElementById('ai-trigger-badge');
+      const stream = document.getElementById('debate-stream');
+      const actionBox = document.getElementById('ai-final-action');
+
+      if (triggerReason) {
+        badge.innerText = triggerReason;
+        badge.className = 'trigger-badge';
+      } else {
+        badge.innerText = '자율 운전 중';
+        badge.className = 'trigger-badge idle';
+      }
+
+      stream.replaceChildren();
+      const turns = typeof debateJson === 'string' ? JSON.parse(debateJson) : debateJson;
+      if (turns?.length) {
+        turns.forEach(t => {
+          const isGpt = t.speaker.includes('ChatGPT') && !t.speaker.includes('Gemini');
+          const div = document.createElement('div');
+          div.className = `chat-bubble ${isGpt ? 'gpt' : 'gemini'}`;
+          const meta = document.createElement('div');
+          meta.className = 'chat-meta';
+          const speaker = document.createElement('span');
+          speaker.textContent = t.speaker;
+          const turn = document.createElement('span');
+          turn.textContent = `Turn ${t.turn}`;
+          const message = document.createElement('div');
+          message.textContent = t.text;
+          meta.append(speaker, turn);
+          div.append(meta, message);
+          stream.appendChild(div);
+        });
+      } else {
+        stream.innerHTML = `<div style="color: var(--text-secondary); font-size: 12.5px; text-align: center; margin-top: 40px;">
+          해당 구간에서는 임계치 초과 이벤트가 없어<br/>AI 위원회가 소집되지 않았습니다.
+        </div>`;
+      }
+
+      actionBox.innerText = finalActionText || '유지 (기존 파라미터 가동)';
+      if (hoveredEquipId) updateTooltipContent(hoveredEquipId);
+    }
+
+    function renderHistorySnapshot(index) {
+      isSandboxMode = false;
+      const modeBadge = document.getElementById('mode-indicator');
+      modeBadge.innerText = historyData === MOCK_HISTORY ? 'DEMO REPLAY' : 'HISTORY REPLAY';
+      modeBadge.className = 'mode-badge';
+
+      const snap = historyData[index];
+      if (!snap) return;
+
+      document.getElementById('slider-tick-label').innerText = `${index + 1} / ${historyData.length} (Tick #${snap.tick_id})`;
+
+      sandboxState = {
+        tick: snap.tick_id,
+        kpi: { eds_yield: snap.eds_yield, power_kw: snap.power_kw, unit_cost: snap.unit_cost },
+        wip_buffers: JSON.parse(snap.wip_buffers),
+        equipments: JSON.parse(snap.equipment_states)
+      };
+
+      applyStateToVisuals(
+        sandboxState,
+        `Tick #${snap.tick_id}  |  ${snap.timestamp}`,
+        snap.trigger_reason,
+        snap.debate_transcript,
+        snap.final_action,
+        snap.oht_metrics ? JSON.parse(snap.oht_metrics) : null
+      );
+    }
+
+    function enterSandboxMode(reason, simulatedDebate, simulatedAction) {
+      isSandboxMode = true;
+      if (playTimer) {
+        clearInterval(playTimer);
+        playTimer = null;
+        document.getElementById('btn-play').innerText = '▶';
+      }
+      const modeBadge = document.getElementById('mode-indicator');
+      modeBadge.innerText = 'WHAT-IF SANDBOX';
+      modeBadge.className = 'mode-badge sandbox';
+
+      applyStateToVisuals(
+        sandboxState,
+        `Sandbox Simulation (Tick #${sandboxState.tick})`,
+        reason,
+        simulatedDebate,
+        simulatedAction
+      );
+    }
+
+    // What-If UI Listeners
+    const waferRateSlider = document.getElementById('sim-wafer-rate');
+    const coolingSlider = document.getElementById('sim-cooling');
+
+    waferRateSlider.addEventListener('input', (e) => {
+      document.getElementById('lbl-wafer-rate').innerText = `${Number(e.target.value).toFixed(1)}x`;
+    });
+
+    coolingSlider.addEventListener('input', (e) => {
+      document.getElementById('lbl-cooling').innerText = `${e.target.value}%`;
+    });
+
+    document.querySelectorAll('.btn-fault').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const eqId = btn.dataset.fault;
+        const eq = sandboxState.equipments[eqId];
+        eq.status = 'MAINTENANCE';
+        eq.maint_type = 'BM';
+        eq.maint_remain = 6;
+        eq.rul = 0.0;
+        eq.load_ratio = 0.0;
+        sandboxState.kpi.eds_yield = Math.max(91.0, sandboxState.kpi.eds_yield - 1.45);
+        sandboxState.kpi.unit_cost = (sandboxState.kpi.unit_cost ?? 0) + 380;
+
+        enterSandboxMode(
+          `SIMULATED_BM:${eqId}`,
+          [
+            { speaker: "ChatGPT (생산기술)", turn: 1, text: `[샌드박스] ${eqId} 돌발 정지로 후속 HBM 라인 병목이 심화됩니다. 상류 투입 속도를 40%로 긴급 감속합니다.` },
+            { speaker: "Gemini (설비·원가)", turn: 2, text: `[샌드박스] 돌발 복구 비용 페널티와 대기 전력을 최소화하기 위해 유휴 챔버 절전 모드를 활성화합니다.` }
+          ],
+          JSON.stringify({ injected_fault: eqId, emergency_throttle: 0.4, est_downtime_ticks: 6 }, null, 2)
+        );
+      });
+    });
+
+    document.getElementById('btn-sim-step').addEventListener('click', () => {
+      const rate = Number(waferRateSlider.value);
+      const coolingRatio = Number(coolingSlider.value) / 100.0;
+      sandboxState.tick += 1;
+
+      const alerts = [];
+      Object.entries(sandboxState.equipments).forEach(([eqId, eq]) => {
+        if (eq.status === 'MAINTENANCE') {
+          eq.maint_remain = Math.max(0, (eq.maint_remain ?? 1) - 1);
+          if (eq.maint_remain === 0) Object.assign(eq, { status: 'RUNNING', maint_type: null, rul: 100 });
+          return;
+        }
+        if (eq.status === 'RUNNING') {
+          eq.feed_rate = rate;
+          eq.load_ratio = Math.min(1.0, 0.72 * rate);
+          eq.chamber_temp = Math.max(20.0, eq.chamber_temp + (rate - 1.0) * 4.5 - (coolingRatio - 1.0) * 6.0);
+          const tempStress = Math.max(0, (eq.chamber_temp - 62.0) * 0.25);
+          eq.rul = Math.max(0.0, Number((eq.rul - (1.2 * rate + tempStress)).toFixed(1)));
+          sandboxState.wip_buffers[eqId] = Math.min(100, Math.max(15, Math.round(sandboxState.wip_buffers[eqId] + (rate - 1.0) * 18)));
+
+          if (eq.rul === 0) {
+            Object.assign(eq, { status: 'MAINTENANCE', maint_type: 'BM', maint_remain: 6, load_ratio: 0 });
+            alerts.push(`BM_FAILURE:${eqId}`);
+          } else if (eq.rul < 20) alerts.push(`RUL_CRITICAL:${eqId}(${eq.rul}%)`);
+          if (sandboxState.wip_buffers[eqId] >= 80) alerts.push(`WIP_BOTTLENECK:${eqId}`);
+        }
+      });
+
+      const oht = computeOhtMetrics(sandboxState.wip_buffers, sandboxState.equipments);
+      const routeNames = ['PHOTO_EUV_TO_ETCH', 'ETCH_TO_HBM_TSV'];
+      oht.times.forEach(({ congestion }, index) => {
+        if (congestion > 0.85) alerts.push(`OHT_CONGESTION:${routeNames[index]}`);
+      });
+      const operatingLoad = Object.values(sandboxState.equipments)
+        .reduce((total, eq) => total + (eq.status === 'RUNNING' ? eq.load_ratio : 0), 0);
+      sandboxState.kpi.power_kw = 1200 * operatingLoad / (3 * 0.72) + 280 * coolingRatio + oht.activeTotal * 1.85;
+      sandboxState.kpi.unit_cost = 1140 + Math.max(0, (rate - 1.0) * 140) + (coolingRatio - 1.0) * 90;
+      if (alerts.length > 0) sandboxState.kpi.eds_yield = Math.max(92.0, sandboxState.kpi.eds_yield - 0.35);
+
+      enterSandboxMode(
+        alerts.length > 0 ? alerts.join(' & ') : null,
+        alerts.length > 0 ? [
+          { speaker: "ChatGPT & Gemini (샌드박스 예측)", turn: 1, text: `투입 배율 ${rate}x, 냉각 ${Math.round(coolingRatio*100)}% 조건 시뮬레이션 결과: ${alerts.join(', ')} 경고가 감지되었습니다.` }
+        ] : null,
+        JSON.stringify({ wafer_start_rate: rate, cooling_load: `${Math.round(coolingRatio*100)}%`, status: "What-If 1틱 예측 완료" }, null, 2)
+      );
+    });
+
+    document.getElementById('btn-reset-sandbox').addEventListener('click', () => {
+      waferRateSlider.value = 1.0;
+      coolingSlider.value = 100;
+      document.getElementById('lbl-wafer-rate').innerText = '1.0x';
+      document.getElementById('lbl-cooling').innerText = '100%';
+      renderHistorySnapshot(currentIndex);
+    });
+
+    // ==========================================
+    // 5. Timeline Controls & Bootstrap
+    // ==========================================
+    const slider = document.getElementById('timeline-slider');
+    const btnPlay = document.getElementById('btn-play');
+
+    slider.addEventListener('input', (e) => {
+      currentIndex = Number(e.target.value);
+      renderHistorySnapshot(currentIndex);
+    });
+
+    document.getElementById('btn-prev').addEventListener('click', () => {
+      currentIndex = Math.max(0, currentIndex - 1);
+      slider.value = currentIndex;
+      renderHistorySnapshot(currentIndex);
+    });
+
+    document.getElementById('btn-next').addEventListener('click', () => {
+      currentIndex = Math.min(historyData.length - 1, currentIndex + 1);
+      slider.value = currentIndex;
+      renderHistorySnapshot(currentIndex);
+    });
+
+    btnPlay.addEventListener('click', () => {
+      if (playTimer) {
+        clearInterval(playTimer);
+        playTimer = null;
+        btnPlay.innerText = '▶';
+      } else {
+        btnPlay.innerText = '❚❚';
+        playTimer = setInterval(() => {
+          currentIndex = (currentIndex + 1) % historyData.length;
+          slider.value = currentIndex;
+          renderHistorySnapshot(currentIndex);
+        }, 1800);
+      }
+    });
+
+    async function bootstrap() {
+      try {
+        const res = await fetch('./replay_history.json');
+        if (!res.ok) throw new Error('No external JSON');
+        historyData = await res.json();
+        if (!Array.isArray(historyData) || !historyData.length) historyData = MOCK_HISTORY;
+      } catch {
+        historyData = MOCK_HISTORY;
+      }
+
+      slider.max = Math.max(0, historyData.length - 1);
+      currentIndex = historyData.length - 1;
+      slider.value = currentIndex;
+      renderHistorySnapshot(currentIndex);
+    }
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = Math.min(clock.getDelta(), 0.05);
+      controls.update();
+
+      // Animate OHT Carriers along overhead track (-8.5 to +8.5)
+      ohtCarriers.forEach(c => {
+        const route = c.userData.progress < 0.5 ? 0 : 1;
+        c.userData.progress = (c.userData.progress + delta * routeSpeeds[route]) % 1;
+        c.position.x = -8.5 + c.userData.progress * 17.0;
+      });
+
+      // Raycast Hover Detection
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(interactiveObjects, false);
+
+      if (intersects.length > 0) {
+        const eqId = intersects[0].object.userData.equipId;
+        if (hoveredEquipId !== eqId) {
+          hoveredEquipId = eqId;
+          updateTooltipContent(eqId);
+        }
+        tooltip.classList.add('visible');
+        document.body.style.cursor = 'pointer';
+      } else {
+        hoveredEquipId = null;
+        tooltip.classList.remove('visible');
+        document.body.style.cursor = 'default';
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    bootstrap();
+    animate();
+  </script>
+</body>
+</html>

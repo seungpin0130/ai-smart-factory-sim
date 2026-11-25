@@ -119,3 +119,25 @@ uvicorn backend.main:app --reload
 이 API는 로컬 시연용입니다. 로그인과 AI 응답은 모의 동작이며, v3의
 `data/m16_fab_history.db`와 별도입니다.
 프론트엔드 연동 정보와 후속 작업은 [GPT_Handover_Prompt.md](GPT_Handover_Prompt.md)에 있습니다.
+
+## OHT와 대시보드 버전
+
+저장소 루트에서 `python -m http.server 8000`으로 열면 다음 화면을 사용할 수 있습니다.
+
+| 경로 | 화면 |
+| --- | --- |
+| `/` | 기존 설정 요청과 대시보드 링크 |
+| `/web/what-if.html` | v3.5 OHT 리플레이, 브라우저 What-If·BM 주입·이력 복귀 |
+| `/web/` | v4.0 3D 설비 선택·편집, 배치 실행·분석 리포트·HTML 내보내기 |
+| `/M16_Fab_Digital_Twin_v5.html` | v5 모의 로그인·3D 제어·트렌드 포털 |
+| `/M16_Fab_Admin_Dashboard_v6.html` | v6 Bootstrap 5 관리자 화면과 모의 알람·리포트 |
+
+v3.5와 v4.0은 `run_cycle.py --mode mock`으로 생성한 리플레이를 읽습니다.
+이력이 없으면 화면에 DEMO REPLAY가 표시됩니다. 대시보드에서 수행하는 What-If와
+배치 계산은 브라우저 메모리에만 남습니다. v5·v6도 브라우저 모의 데이터로 작동합니다.
+
+OHT는 140m·185m 가상 경로에서 투입률과 목적지 WIP로 대차 수를 추정합니다.
+48대 중 예비 6대를 제외해 구간당 21대를 혼잡도 기준으로 사용하며, 85% 초과 시
+`OHT_CONGESTION`으로 위원회를 소집합니다. 구간별 반송 시간은 추정치입니다.
+반송 전력은 30분만큼 kWh로 환산해 팹 에너지에 합산하고, 구간별 지표는
+SQLite와 리플레이에 기록합니다.

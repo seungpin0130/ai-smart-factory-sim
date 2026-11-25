@@ -1,94 +1,26 @@
 {
   "state": {
-    "cycle": 1,
-    "timestamp": "2026-11-25T05:23:14+00:00",
-    "temperature": 49.0,
-    "output_units": 112,
-    "total_output": 112,
-    "defect_rate": 0.8,
-    "raw_material": 388,
+    "cycle": 0,
+    "timestamp": "2026-11-25T00:00:00Z",
+    "chamber_temp": 42.0,
+    "wafer_output": 0,
+    "total_wafer_output": 0,
+    "eds_yield": 96.5,
+    "foup_wafer_stock": 320,
+    "cleanroom_class": 10,
+    "pellicle_health": 100.0,
     "status": "NORMAL",
-    "last_event": "정상 가동"
+    "last_event": "M16 가상 팹 클린룸 및 EUV/HBM 라인 초기화 완료",
+    "hbm_wip_buffer": 40,
+    "power_kwh": 420.0,
+    "unit_cost_index": 100.0,
+    "ramp_up_remaining": 0
   },
   "config": {
-    "conveyor_speed": 70,
-    "cooling_power": 65,
-    "auto_restock": false
+    "euv_throughput": 75,
+    "chiller_power": 60,
+    "auto_foup_order": false,
+    "schedule_pm": false
   },
-  "history": [
-    {
-      "cycle": 1,
-      "timestamp": "2026-11-25T05:23:14+00:00",
-      "mode": "mock",
-      "requested_mode": "mock",
-      "error_type": null,
-      "state": {
-        "cycle": 1,
-        "timestamp": "2026-11-25T05:23:14+00:00",
-        "temperature": 49.0,
-        "output_units": 112,
-        "total_output": 112,
-        "defect_rate": 0.8,
-        "raw_material": 388,
-        "status": "NORMAL",
-        "last_event": "정상 가동"
-      },
-      "previous_config": {
-        "conveyor_speed": 75,
-        "cooling_power": 50,
-        "auto_restock": false
-      },
-      "proposed_config": {
-        "conveyor_speed": 70,
-        "cooling_power": 65,
-        "auto_restock": false
-      },
-      "applied_config": {
-        "conveyor_speed": 70,
-        "cooling_power": 65,
-        "auto_restock": false
-      },
-      "action_reason": "[MOCK] 규칙 기반 제어 확정 (실제 AI 호출 없음)",
-      "overrides": [],
-      "create_issue_alert": false,
-      "transcript": [
-        {
-          "role": "ChatGPT (모의)",
-          "payload": {
-            "new_config": {
-              "conveyor_speed": 70,
-              "cooling_power": 65,
-              "auto_restock": false
-            },
-            "action_reason": "[MOCK] 생산 120개 목표의 규칙 기반 제안",
-            "create_issue_alert": false
-          }
-        },
-        {
-          "role": "Gemini (모의)",
-          "payload": {
-            "recommended_config": {
-              "conveyor_speed": 70,
-              "cooling_power": 65,
-              "auto_restock": false
-            },
-            "risk_analysis": "[MOCK] 온도·불량률·예상 잔고에 SOP 적용",
-            "approves_proposal": true
-          }
-        },
-        {
-          "role": "의장 (모의)",
-          "payload": {
-            "new_config": {
-              "conveyor_speed": 70,
-              "cooling_power": 65,
-              "auto_restock": false
-            },
-            "action_reason": "[MOCK] 규칙 기반 제어 확정 (실제 AI 호출 없음)",
-            "create_issue_alert": false
-          }
-        }
-      ]
-    }
-  ]
+  "history": []
 }

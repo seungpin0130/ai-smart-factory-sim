@@ -1,80 +1,99 @@
-name: Dual-AI Factory Loop
+name: Dual-AI SK Hynix Fab Simulation
 on:
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: 'mock: API 호출 없음 / live: OpenAI + Gemini'
+        description: 'mock: API 호출 없음 / live: 실제 AI'
         type: choice
         options: [mock, live]
         default: mock
-      alerts:
-        description: '실제 실행에서 장애 Issue 및 댓글 생성·복구 종료'
+      force_ai_debate:
+        description: 'NORMAL에서도 3턴 토론 강제 실행'
         type: boolean
         default: true
+      alerts:
+        description: 'live 모드 장애 Issue 생성·댓글·복구 종료'
+        type: boolean
+        default: false
+      config_json:
+        description: '선택: 다음 사이클에 적용할 전체 config JSON'
+        type: string
+        default: ''
+      expected_config_sha:
+        description: 'config_json 사용 시 최신 config 파일 blob SHA'
+        type: string
+        default: ''
 permissions:
   contents: write
   issues: write
 concurrency:
-  group: factory-state-writer
+  group: smart-factory-sim-loop
   cancel-in-progress: false
 jobs:
-  cycle:
-    if: github.ref_name == github.event.repository.default_branch && (github.event_name == 'workflow_dispatch' || vars.FACTORY_ENABLED == 'true')
+  run-fab-cycle:
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Sync latest committed state before simulation
+        run: git pull --rebase origin "${{ github.event.repository.default_branch }}"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-      - name: Run one cycle
+      - run: python -m pip install -r requirements.txt
+      - name: Run v2 fab simulation and council
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
-          COUNCIL_MODE: ${{ inputs.mode || 'live' }}
-        run: python run_cycle.py --mode "$COUNCIL_MODE"
-      - name: Persist state and council records
+          COUNCIL_MODE: ${{ inputs.mode || (secrets.OPENAI_API_KEY != '' && secrets.GEMINI_API_KEY != '' && 'live' || 'mock') }}
+          FORCE_AI_DEBATE: ${{ inputs.force_ai_debate || 'false' }}
+          CONTROL_JSON: ${{ inputs.config_json }}
+          EXPECTED_CONFIG_SHA: ${{ inputs.expected_config_sha }}
+        run: |
+          python migrate_to_fab.py
+          python run_cycle.py --mode "$COUNCIL_MODE" --control-json "$CONTROL_JSON" --expected-config-sha "$EXPECTED_CONFIG_SHA"
+      - name: Commit and push coherent v2 snapshot
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add state.json config.json dashboard.json logs/
+          git add state.json config.json telemetry_history.json dashboard.json logs/
           if ! git diff --cached --quiet; then
-            git commit -m 'factory: persist simulation cycle and council decision'
+            git commit -m 'fab v2: persist telemetry and council control'
             git push origin "HEAD:${{ github.event.repository.default_branch }}"
           fi
-      - name: Synchronize incident issues
+      - name: Synchronize incident Issues
         if: github.event_name == 'schedule' || inputs.alerts
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python github_alerts.py
-      - name: Dashboard summary
-        if: always()
+      - name: Write cycle summary
         run: |
-          if [ -f logs/last_decision.json ]; then
-            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           d = json.load(open('logs/last_decision.json'))
-          print(f"### Factory cycle {d['cycle']} · {d['mode']}")
-          print(f"Status: {d['state']['status']} / {d['state']['temperature']}°C")
+          s = d['state']
+          print(f"### Fab v2 cycle {s['cycle']} · {d['mode']} · chair={d.get('chair')}")
+          print(f"{s['status']} / {s['chamber_temp']}°C / EDS {s['eds_yield']}% / WIP {s['hbm_wip_buffer']}")
           print(d['action_reason'])
-          print(f"Applied: `{d['applied_config']}`")
           PY
-          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: factory-snapshot-${{ github.run_id }}
+          name: fab-v2-snapshot-${{ github.run_id }}
           path: |
             index.html
+            state.json
+            config.json
+            telemetry_history.json
             dashboard.json
             logs/last_decision.json
           retention-days: 14

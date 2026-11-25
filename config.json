@@ -1,5 +1,6 @@
 {
-  "conveyor_speed": 70,
-  "cooling_power": 65,
-  "auto_restock": false
+  "euv_throughput": 75,
+  "chiller_power": 60,
+  "auto_foup_order": false,
+  "schedule_pm": false
 }

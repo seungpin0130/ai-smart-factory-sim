@@ -2,7 +2,7 @@ name: Factory dashboard
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ['Dual-AI Factory Loop']
+    workflows: ['Dual-AI SK Hynix Fab Simulation']
     types: [completed]
 permissions:
   contents: read
@@ -26,7 +26,9 @@ jobs:
       - name: Stage public dashboard only
         run: |
           mkdir site
-          cp index.html dashboard.json site/
+          cp index.html state.json config.json telemetry_history.json dashboard.json site/
+          mkdir -p site/logs
+          cp logs/council_history.md site/logs/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

@@ -13,7 +13,7 @@ class SDKContractTests(unittest.TestCase):
     def test_full_three_turn_council_through_real_sdk_parsers(self):
         calls=[]
         decision={"new_config":config().model_dump(), "action_reason":"생산 유지", "create_issue_alert":False}
-        audit={"recommended_config":config(conveyor_speed=60,cooling_power=80).model_dump(),
+        audit={"recommended_config":config(euv_throughput=60,chiller_power=80).model_dump(),
                "risk_analysis":"보수적인 안전 마진", "approves_proposal":False}
 
         def openai_handler(request):
@@ -50,8 +50,8 @@ class SDKContractTests(unittest.TestCase):
             council.gemini.close()
         self.assertEqual(record["mode"],"live",record)
         self.assertEqual([name for name,_ in calls],["openai","gemini","openai"])
-        self.assertEqual(record["applied_config"]["conveyor_speed"],60)
-        self.assertEqual(record["applied_config"]["cooling_power"],80)
+        self.assertEqual(record["applied_config"]["euv_throughput"],60)
+        self.assertEqual(record["applied_config"]["chiller_power"],80)
 
 
 if __name__ == "__main__":

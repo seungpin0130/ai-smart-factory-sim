@@ -3,6 +3,18 @@
 최근 120회. 전체 JSON 원장은 `logs/cycles/`에 보존됩니다.
 
 
+## Cycle 2 · hold · 2026-11-25T17:30:53+00:00
+
+상태 NORMAL / 챔버 44.6°C / EDS 98.2% / 청정도 13 / 펠리클 93.8% / 재고 230매
+
+
+실제 적용: `{'euv_throughput': 75, 'chiller_power': 60, 'auto_foup_order': False, 'schedule_pm': False}`
+
+사유: 정상 안정 구간: API 호출 없이 직전 제어 유지 및 SOP 점검
+
+SOP 보정: 없음
+
+
 ## Cycle 1 · mock · 2026-11-25T06:09:27+00:00
 
 상태 NORMAL / 챔버 43.4°C / EDS 98.2% / 청정도 12 / 펠리클 96.9% / 재고 275매

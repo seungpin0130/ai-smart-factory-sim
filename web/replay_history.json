@@ -1,0 +1,15 @@
+[
+  {
+    "tick_id": 2,
+    "timestamp": "2026-11-25T17:30:53+00:00",
+    "eds_yield": 98.2,
+    "power_kw": 1647.0,
+    "unit_cost": 3.06,
+    "wip_buffers": "{\"PHOTO_EUV\": 0, \"ETCH\": 0, \"HBM_TSV\": 34}",
+    "equipment_states": "{\"PHOTO_EUV\": {\"status\": \"RUNNING\", \"rul\": 98.53, \"chamber_temp\": 33.9, \"load_ratio\": 0.75, \"feed_rate\": 1.2, \"maint_remain\": 0}, \"ETCH\": {\"status\": \"RUNNING\", \"rul\": 98.53, \"chamber_temp\": 44.6, \"load_ratio\": 0.75, \"feed_rate\": 1.0, \"maint_remain\": 0}, \"HBM_TSV\": {\"status\": \"RUNNING\", \"rul\": 98.0, \"chamber_temp\": 56.6, \"load_ratio\": 1.0, \"feed_rate\": 1.0, \"maint_remain\": 0}}",
+    "trigger_reason": null,
+    "debate_transcript": "[]",
+    "final_action": "{\n  \"PHOTO_EUV_feed_rate\": 1.2,\n  \"PHOTO_EUV_action\": \"KEEP_RUNNING\",\n  \"ETCH_feed_rate\": 1.0,\n  \"ETCH_action\": \"KEEP_RUNNING\",\n  \"HBM_TSV_action\": \"KEEP_RUNNING\",\n  \"target_temp\": 64.0,\n  \"euv_throughput\": 75,\n  \"chiller_power\": 60,\n  \"auto_foup_order\": false,\n  \"schedule_pm\": false\n}",
+    "oht_metrics": "{\"total_vehicles\": 48, \"active_vehicles\": 20, \"utilization\": 0.417, \"oht_power_kw\": 37.0, \"routes\": {\"PHOTO_EUV_TO_ETCH\": {\"active_carriers\": 10, \"congestion_ratio\": 0.476, \"transfer_time_sec\": 69.6, \"oht_power_kw\": 18.5, \"status\": \"SMOOTH\"}, \"ETCH_TO_HBM_TSV\": {\"active_carriers\": 10, \"congestion_ratio\": 0.476, \"transfer_time_sec\": 85.4, \"oht_power_kw\": 18.5, \"status\": \"SMOOTH\"}}, \"alerts\": []}"
+  }
+]

@@ -1,5 +1,19 @@
 # M16 가상 반도체 팹 v2
 
+## 최신 버전 · Enterprise v7
+
+WebSocket 실시간 관제, Auto-Pilot/HITL, A/B 벤치마크, 직무별 감사 기록을
+[독립 v7 패키지](m16_enterprise_v7/README.md)에서 실행할 수 있습니다.
+저장소 루트의 기존 시뮬레이션과 GitHub Actions도 사용할 수 있습니다.
+
+```bash
+cd m16_enterprise_v7
+docker compose up --build -d
+```
+
+기본 포트는 8000이며, 대시보드는 `/`, Swagger는 `/docs`입니다.
+
+
 첨부 v2의 3D 장면과 WIP·PM·램프업·전력/원가 모델을 반영한 교육용 시뮬레이션입니다. 실제 SK하이닉스 공정 데이터/공식 설비 모델이 아니며, 200매는 가상 입고 배치입니다.
 
 ## 실행

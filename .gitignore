@@ -9,3 +9,6 @@ __pycache__/
 site/
 /m16_fab.db
 /m16_fab.db-*
+
+# Enterprise v7 local database
+/m16_enterprise_v7/data/

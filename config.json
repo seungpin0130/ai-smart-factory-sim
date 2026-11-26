@@ -1,6 +1,6 @@
 {
-  "euv_throughput": 75,
-  "chiller_power": 60,
-  "auto_foup_order": false,
+  "euv_throughput": 50,
+  "chiller_power": 85,
+  "auto_foup_order": true,
   "schedule_pm": false
 }

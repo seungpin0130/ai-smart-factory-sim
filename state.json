@@ -1,17 +1,17 @@
 {
-  "cycle": 6,
-  "timestamp": "2026-11-27T03:05:50+00:00",
-  "chamber_temp": 49.2,
+  "cycle": 7,
+  "timestamp": "2026-11-27T12:57:31+00:00",
+  "chamber_temp": 53.2,
   "wafer_output": 47,
-  "total_wafer_output": 279,
+  "total_wafer_output": 326,
   "eds_yield": 98.2,
-  "foup_wafer_stock": 256,
-  "hbm_wip_buffer": 16,
-  "cleanroom_class": 7,
-  "pellicle_health": 81.1,
-  "power_kwh": 882.7,
-  "unit_cost_index": 146.0,
+  "foup_wafer_stock": 202,
+  "hbm_wip_buffer": 22,
+  "cleanroom_class": 12,
+  "pellicle_health": 77.6,
+  "power_kwh": 884.2,
+  "unit_cost_index": 146.1,
   "ramp_up_remaining": 0,
   "status": "NORMAL",
-  "last_event": "돌발: 식각 챔버 칠러 유량 저하"
+  "last_event": "EUV·식각 및 HBM 가상 라인 정상 가동"
 }

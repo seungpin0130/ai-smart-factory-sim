@@ -1,0 +1,62 @@
+{
+  "cycle": 7,
+  "timestamp": "2026-11-27T12:57:31+00:00",
+  "mode": "hold",
+  "committee_convened": false,
+  "chair": null,
+  "requested_mode": "mock",
+  "error_type": null,
+  "state": {
+    "cycle": 7,
+    "timestamp": "2026-11-27T12:57:31+00:00",
+    "chamber_temp": 53.2,
+    "wafer_output": 47,
+    "total_wafer_output": 326,
+    "eds_yield": 98.2,
+    "foup_wafer_stock": 202,
+    "hbm_wip_buffer": 22,
+    "cleanroom_class": 12,
+    "pellicle_health": 77.6,
+    "power_kwh": 884.2,
+    "unit_cost_index": 146.1,
+    "ramp_up_remaining": 0,
+    "status": "NORMAL",
+    "last_event": "EUV·식각 및 HBM 가상 라인 정상 가동"
+  },
+  "previous_config": {
+    "euv_throughput": 75,
+    "chiller_power": 60,
+    "auto_foup_order": false,
+    "schedule_pm": false
+  },
+  "proposed_config": {
+    "euv_throughput": 75,
+    "chiller_power": 60,
+    "auto_foup_order": false,
+    "schedule_pm": false
+  },
+  "applied_config": {
+    "euv_throughput": 75,
+    "chiller_power": 60,
+    "auto_foup_order": false,
+    "schedule_pm": false
+  },
+  "action_reason": "정상 안정 구간: API 호출 없이 직전 제어 유지 및 SOP 점검",
+  "overrides": [],
+  "create_issue_alert": false,
+  "transcript": [],
+  "trigger_reason": null,
+  "debate_transcript": [],
+  "final_action": {
+    "PHOTO_EUV_feed_rate": 1.2,
+    "PHOTO_EUV_action": "KEEP_RUNNING",
+    "ETCH_feed_rate": 1.2,
+    "ETCH_action": "KEEP_RUNNING",
+    "HBM_TSV_action": "KEEP_RUNNING",
+    "target_temp": 64.0,
+    "euv_throughput": 75,
+    "chiller_power": 60,
+    "auto_foup_order": false,
+    "schedule_pm": false
+  }
+}

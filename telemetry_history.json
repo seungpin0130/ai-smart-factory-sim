@@ -83,5 +83,22 @@
     "ramp_up_remaining": 0,
     "status": "NORMAL",
     "last_event": "OHT 가상 배치 200매 입고 완료"
+  },
+  {
+    "cycle": 6,
+    "timestamp": "2026-11-27T03:05:50+00:00",
+    "chamber_temp": 49.2,
+    "wafer_output": 47,
+    "total_wafer_output": 279,
+    "eds_yield": 98.2,
+    "foup_wafer_stock": 256,
+    "hbm_wip_buffer": 16,
+    "cleanroom_class": 7,
+    "pellicle_health": 81.1,
+    "power_kwh": 882.7,
+    "unit_cost_index": 146.0,
+    "ramp_up_remaining": 0,
+    "status": "NORMAL",
+    "last_event": "돌발: 식각 챔버 칠러 유량 저하"
   }
 ]

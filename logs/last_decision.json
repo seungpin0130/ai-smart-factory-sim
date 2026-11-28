@@ -1,27 +1,27 @@
 {
-  "cycle": 9,
-  "timestamp": "2026-11-28T03:45:34+00:00",
+  "cycle": 10,
+  "timestamp": "2026-11-28T12:45:25+00:00",
   "mode": "mock",
   "committee_convened": true,
-  "chair": "Gemini",
+  "chair": "ChatGPT",
   "requested_mode": "mock",
   "error_type": null,
   "state": {
-    "cycle": 9,
-    "timestamp": "2026-11-28T03:45:34+00:00",
-    "chamber_temp": 59.6,
-    "wafer_output": 47,
-    "total_wafer_output": 420,
-    "eds_yield": 97.64,
-    "foup_wafer_stock": 294,
-    "hbm_wip_buffer": 34,
+    "cycle": 10,
+    "timestamp": "2026-11-28T12:45:25+00:00",
+    "chamber_temp": 62.1,
+    "wafer_output": 46,
+    "total_wafer_output": 466,
+    "eds_yield": 96.77,
+    "foup_wafer_stock": 240,
+    "hbm_wip_buffer": 40,
     "cleanroom_class": 15,
-    "pellicle_health": 70.6,
-    "power_kwh": 884.2,
-    "unit_cost_index": 146.1,
+    "pellicle_health": 66.8,
+    "power_kwh": 882.35,
+    "unit_cost_index": 149.1,
     "ramp_up_remaining": 0,
-    "status": "NORMAL",
-    "last_event": "OHT 가상 배치 200매 입고 완료"
+    "status": "WARNING",
+    "last_event": "EUV·식각 및 HBM 가상 라인 정상 가동"
   },
   "previous_config": {
     "euv_throughput": 75,
@@ -30,14 +30,14 @@
     "schedule_pm": false
   },
   "proposed_config": {
-    "euv_throughput": 75,
-    "chiller_power": 60,
+    "euv_throughput": 50,
+    "chiller_power": 85,
     "auto_foup_order": false,
     "schedule_pm": false
   },
   "applied_config": {
-    "euv_throughput": 75,
-    "chiller_power": 60,
+    "euv_throughput": 50,
+    "chiller_power": 85,
     "auto_foup_order": false,
     "schedule_pm": false
   },
@@ -62,21 +62,21 @@
       "role": "Gemini (모의)",
       "payload": {
         "recommended_config": {
-          "euv_throughput": 75,
-          "chiller_power": 60,
+          "euv_throughput": 50,
+          "chiller_power": 85,
           "auto_foup_order": false,
           "schedule_pm": false
         },
         "risk_analysis": "[MOCK] 챔버 온도·EDS 수율·청정도·수명·예상 잔고에 SOP 적용",
-        "approves_proposal": true
+        "approves_proposal": false
       }
     },
     {
-      "role": "Gemini 의장 (모의)",
+      "role": "ChatGPT 의장 (모의)",
       "payload": {
         "new_config": {
-          "euv_throughput": 75,
-          "chiller_power": 60,
+          "euv_throughput": 50,
+          "chiller_power": 85,
           "auto_foup_order": false,
           "schedule_pm": false
         },
@@ -85,7 +85,7 @@
       }
     }
   ],
-  "trigger_reason": "PERIODIC",
+  "trigger_reason": "FAB_WARNING",
   "debate_transcript": [
     {
       "speaker": "ChatGPT (모의)",
@@ -98,7 +98,7 @@
       "text": "[MOCK] 챔버 온도·EDS 수율·청정도·수명·예상 잔고에 SOP 적용"
     },
     {
-      "speaker": "Gemini 의장 (모의)",
+      "speaker": "ChatGPT 의장 (모의)",
       "turn": 3,
       "text": "[MOCK] 규칙 기반 제어 확정 (실제 AI 호출 없음)"
     }
@@ -110,8 +110,8 @@
     "ETCH_action": "KEEP_RUNNING",
     "HBM_TSV_action": "KEEP_RUNNING",
     "target_temp": 64.0,
-    "euv_throughput": 75,
-    "chiller_power": 60,
+    "euv_throughput": 50,
+    "chiller_power": 85,
     "auto_foup_order": false,
     "schedule_pm": false
   }

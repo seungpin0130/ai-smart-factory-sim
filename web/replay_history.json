@@ -102,5 +102,18 @@
     "debate_transcript": "[{\"speaker\": \"ChatGPT (모의)\", \"turn\": 1, \"text\": \"[MOCK] 웨이퍼 후공정 최대48매/사이클·수율 94% 목표의 규칙 기반 제안\"}, {\"speaker\": \"Gemini (모의)\", \"turn\": 2, \"text\": \"[MOCK] 챔버 온도·EDS 수율·청정도·수명·예상 잔고에 SOP 적용\"}, {\"speaker\": \"Gemini 의장 (모의)\", \"turn\": 3, \"text\": \"[MOCK] 규칙 기반 제어 확정 (실제 AI 호출 없음)\"}]",
     "final_action": "{\n  \"PHOTO_EUV_feed_rate\": 1.2,\n  \"PHOTO_EUV_action\": \"KEEP_RUNNING\",\n  \"ETCH_feed_rate\": 1.0,\n  \"ETCH_action\": \"KEEP_RUNNING\",\n  \"HBM_TSV_action\": \"KEEP_RUNNING\",\n  \"target_temp\": 64.0,\n  \"euv_throughput\": 75,\n  \"chiller_power\": 60,\n  \"auto_foup_order\": false,\n  \"schedule_pm\": false\n}",
     "oht_metrics": "{\"total_vehicles\": 48, \"active_vehicles\": 24, \"utilization\": 0.5, \"oht_power_kw\": 44.4, \"routes\": {\"PHOTO_EUV_TO_ETCH\": {\"active_carriers\": 12, \"congestion_ratio\": 0.571, \"transfer_time_sec\": 73.4, \"oht_power_kw\": 22.2, \"status\": \"SMOOTH\"}, \"ETCH_TO_HBM_TSV\": {\"active_carriers\": 12, \"congestion_ratio\": 0.571, \"transfer_time_sec\": 90.2, \"oht_power_kw\": 22.2, \"status\": \"SMOOTH\"}}, \"alerts\": []}"
+  },
+  {
+    "tick_id": 10,
+    "timestamp": "2026-11-28T12:45:25+00:00",
+    "eds_yield": 96.77,
+    "power_kw": 1764.7,
+    "unit_cost": 3.28,
+    "wip_buffers": "{\"PHOTO_EUV\": 0, \"ETCH\": 0, \"HBM_TSV\": 40}",
+    "equipment_states": "{\"PHOTO_EUV\": {\"status\": \"RUNNING\", \"rul\": 85.58, \"chamber_temp\": 35.88, \"load_ratio\": 0.9, \"feed_rate\": 1.2, \"maint_remain\": 0}, \"ETCH\": {\"status\": \"RUNNING\", \"rul\": 84.61, \"chamber_temp\": 62.1, \"load_ratio\": 0.9, \"feed_rate\": 1.0, \"maint_remain\": 0}, \"HBM_TSV\": {\"status\": \"RUNNING\", \"rul\": 82.0, \"chamber_temp\": 56.6, \"load_ratio\": 1.0, \"feed_rate\": 1.0, \"maint_remain\": 0}}",
+    "trigger_reason": "FAB_WARNING",
+    "debate_transcript": "[{\"speaker\": \"ChatGPT (모의)\", \"turn\": 1, \"text\": \"[MOCK] 웨이퍼 후공정 최대48매/사이클·수율 94% 목표의 규칙 기반 제안\"}, {\"speaker\": \"Gemini (모의)\", \"turn\": 2, \"text\": \"[MOCK] 챔버 온도·EDS 수율·청정도·수명·예상 잔고에 SOP 적용\"}, {\"speaker\": \"ChatGPT 의장 (모의)\", \"turn\": 3, \"text\": \"[MOCK] 규칙 기반 제어 확정 (실제 AI 호출 없음)\"}]",
+    "final_action": "{\n  \"PHOTO_EUV_feed_rate\": 1.2,\n  \"PHOTO_EUV_action\": \"KEEP_RUNNING\",\n  \"ETCH_feed_rate\": 1.0,\n  \"ETCH_action\": \"KEEP_RUNNING\",\n  \"HBM_TSV_action\": \"KEEP_RUNNING\",\n  \"target_temp\": 64.0,\n  \"euv_throughput\": 50,\n  \"chiller_power\": 85,\n  \"auto_foup_order\": false,\n  \"schedule_pm\": false\n}",
+    "oht_metrics": "{\"total_vehicles\": 48, \"active_vehicles\": 22, \"utilization\": 0.458, \"oht_power_kw\": 40.7, \"routes\": {\"PHOTO_EUV_TO_ETCH\": {\"active_carriers\": 12, \"congestion_ratio\": 0.571, \"transfer_time_sec\": 73.4, \"oht_power_kw\": 22.2, \"status\": \"SMOOTH\"}, \"ETCH_TO_HBM_TSV\": {\"active_carriers\": 10, \"congestion_ratio\": 0.476, \"transfer_time_sec\": 85.4, \"oht_power_kw\": 18.5, \"status\": \"SMOOTH\"}}, \"alerts\": []}"
   }
 ]
